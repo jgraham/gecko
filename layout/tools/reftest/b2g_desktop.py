@@ -204,9 +204,7 @@ def run_desktop_reftests(parser, options, args):
     else:
         reftest = B2GDesktopReftest(marionette_args)
 
-    options = ReftestOptions.verifyCommonOptions(parser, options, reftest)
-    if options == None:
-        sys.exit(1)
+    parser.validate(options, reftest)
 
     # add a -bin suffix if b2g-bin exists, but just b2g was specified
     if options.app[-4:] != '-bin':
