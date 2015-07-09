@@ -58,7 +58,7 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
                           dest="timeout",
                           type=int,
                           default=5 * 60,  # 5 minutes per bug 479518
-                          help="reftest will timeout in specified number of seconds. [default %default s].")
+                          help="reftest will timeout in specified number of seconds. [default %(default)s].")
 
         self.add_argument("--leak-threshold",
                           action="store",
@@ -164,6 +164,7 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
 
         self.add_argument("manifest",
                           metavar="MANIFEST_PATH",
+                          nargs="?",
                           help="Path to test manifest file")
 
     def validate(self, options, reftest):
@@ -217,27 +218,51 @@ class DesktopArgumentsParser(ReftestArgumentsParser):
                           dest="runTestsInParallel",
                           help="run tests in parallel if possible")
 
+        self.add_argument("--reftest-extension-path",
+                          action="store",
+                          dest="reftestExtensionPath",
+                          help="Path to the reftest extension")
+
+        self.add_argument("--special-powers-extension-path",
+                          action="store",
+                          dest="specialPowersExtensionPath",
+                          help="Path to the special powers extension")
 
     def validate(self, options, reftest):
         super(DesktopArgumentsParser, self).validate(options, reftest)
+        try:
+            from mozbuild.base import MozbuildObject
+            build_obj = MozbuildObject.from_environment(cwd=here)
+        except ImportError:
+            build_obj = None
 
         if not options.manifest:
             self.error("No reftest.list specified.")
 
         if options.app is None:
-            try:
-                from mozbuild.base import MozbuildObject
-                build_obj = MozbuildObject.from_environment(cwd=here)
-                bin_dir = (build_obj.get_binary_path() if
-                           build_obj and build_obj.substs['MOZ_BUILD_APP'] != 'mobile/android'
-                           else None)
-            except ImportError:
-                bin_dir = None
+            bin_dir = (build_obj.get_binary_path() if
+                       build_obj and build_obj.substs['MOZ_BUILD_APP'] != 'mobile/android'
+                       else None)
 
             if bin_dir:
                 options.app = bin_dir
             else:
                 self.error("could not find the application path, --appname must be specified")
+
+        if options.reftestExtensionPath is None:
+            if build_obj is not None:
+                options.reftestExtensionPath = os.path.join(build_obj.topobjdir, "_tests",
+                                                            "reftest", "reftest")
+            else:
+                options.reftestExtensionPath = os.path.join(here, "reftest")
+
+        if (options.specialPowersExtensionPath is None and
+            options.suite in ["crashtests", "crashtests-ipc", "jstestbrowser"]):
+            if build_obj is not None:
+                options.specialPowersExtensionPath = os.path.join(build_obj.topobjdir, "_tests",
+                                                                  "reftest", "specialpowers")
+            else:
+                options.specialPowersExtensionPath = os.path.join(here, "specialpowers")
 
         options.app = reftest.getFullPath(options.app)
         if not os.path.exists(options.app):

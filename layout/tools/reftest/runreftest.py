@@ -17,7 +17,7 @@ import sys
 import threading
 
 SCRIPT_DIRECTORY = os.path.abspath(
-    os.path.realpath(os.path.dirname(sys.argv[0])))
+    os.path.realpath(os.path.dirname(__file__)))
 sys.path.insert(0, SCRIPT_DIRECTORY)
 
 from automationutils import (
@@ -242,13 +242,10 @@ class RefTest(object):
                 thispref[1].strip())
 
         # install the reftest extension bits into the profile
-        addons = []
-        addons.append(os.path.join(SCRIPT_DIRECTORY, "reftest"))
+        addons = [options.reftestExtensionPath]
 
-        # I would prefer to use "--install-extension reftest/specialpowers", but that requires tight coordination with
-        # release engineering and landing on multiple branches at once.
-        if special_powers and (manifest.endswith('crashtests.list') or manifest.endswith('jstests.list')):
-            addons.append(os.path.join(SCRIPT_DIRECTORY, 'specialpowers'))
+        if options.specialPowersExtensionPath is not None:
+            addons.append(options.specialPowersExtensionPath)
             # SpecialPowers requires insecure automation-only features that we
             # put behind a pref.
             prefs['security.turn_off_all_security_so_that_viruses_can_take_over_this_computer'] = True
@@ -688,6 +685,17 @@ class RefTest(object):
                 continue
 
 
+def run(**kwargs):
+    # Mach gives us kwargs; this is a way to turn them back into an
+    # options object
+    parser = reftestcommandline.DesktopArgumentsParser()
+    reftest = RefTest()
+    parser.set_defaults(**kwargs)
+    options = parser.parse_args([kwargs["manifest"]])
+    parser.validate(options, reftest)
+    print options
+    return reftest.runTests(options.manifest, options)
+
 
 def main():
     parser = reftestcommandline.DesktopArgumentsParser()
@@ -697,6 +705,7 @@ def main():
     parser.validate(options, reftest)
 
     sys.exit(reftest.runTests(options.manifest, options))
+
 
 if __name__ == "__main__":
     main()

@@ -11,6 +11,7 @@ import sys
 import warnings
 import which
 
+import mozinfo
 from mozbuild.base import (
     MachCommandBase,
     MachCommandConditions as conditions,
@@ -23,8 +24,7 @@ from mach.decorators import (
     Command,
 )
 
-
-DEBUGGER_HELP = 'Debugger binary to run test in. Program name or path.'
+import reftestcommandline
 
 ADB_NOT_FOUND = '''
 The %s command requires the adb binary to be on your path.
@@ -228,139 +228,49 @@ class ReftestRunner(MozbuildObject):
 
         return reftest.run_remote_reftests(parser, options, args)
 
-    def run_desktop_test(self, test_file=None, filter=None, suite=None,
-            debugger=None, debugger_args=None, parallel=False, shuffle=False,
-            e10s=False, extraPrefs=None, this_chunk=None, total_chunks=None):
-        """Runs a reftest.
+    def run_desktop_test(self, **kwargs):
+        """Runs a reftest."""
+        import runreftest
 
-        test_file is a path to a test file. It can be a relative path from the
-        top source directory, an absolute filename, or a directory containing
-        test files.
-
-        filter is a regular expression (in JS syntax, as could be passed to the
-        RegExp constructor) to select which reftests to run from the manifest.
-
-        suite is the type of reftest to run. It can be one of ('reftest',
-        'crashtest', 'jstestbrowser').
-
-        debugger is the program name (in $PATH) or the full path of the
-        debugger to run.
-
-        debugger_args are the arguments passed to the debugger.
-
-        parallel indicates whether tests should be run in parallel or not.
-
-        shuffle indicates whether to run tests in random order.
-        """
-
-        if suite not in ('reftest', 'reftest-ipc', 'crashtest', 'crashtest-ipc', 'jstestbrowser'):
+        if kwargs["suite"] not in ('reftest', 'reftest-ipc', 'crashtest', 'crashtest-ipc',
+                                   'jstestbrowser'):
             raise Exception('None or unrecognized reftest suite type.')
 
-        env = {}
-        extra_args = []
+        default_manifest = {
+            "reftest": (self.topsrcdir, "layout", "reftests", "reftest.list"),
+            "reftest-ipc": (self.topsrcdir, "layout", "reftests", "reftest.list"),
+            "crashtest": (self.topsrcdir, "testing", "crashtest", "crashtest.list"),
+            "crashtest-ipc": (self.topsrcdir, "testing", "crashtest", "crashtest.list"),
+            "jstestbrowser": (self.topobjdir, "dist", "test-stage", "jsreftest", "tests",
+                              "jstests.list")
+        }
 
-        if test_file:
-            (path, single_file_filter) = self._find_manifest(suite, test_file)
-            if not os.path.exists(mozpath.join(self.topsrcdir, path)):
-                raise Exception('No manifest file was found at %s.' % path)
-            if single_file_filter:
-                if filter:
-                    raise Exception('Cannot run single files in conjunction with --filter')
-                filter = single_file_filter
-            env[b'TEST_PATH'] = path
-        if filter:
-            extra_args.extend(['--filter', self._make_shell_string(filter)])
+        kwargs["extraProfileFiles"] = [os.path.join(self.topobjdir, "dist", "plugins")]
+        kwargs["symbolsPath"] = os.path.join(self.topobjdir, "crashreporter-symbols")
 
-        pass_thru = False
-
-        if debugger:
-            extra_args.append('--debugger=\'%s\'' % debugger)
-            pass_thru = True
-            if debugger_args:
-                # Use _make_shell_string (which quotes) so that we
-                # handle multiple args being passed to the debugger.
-                extra_args.extend(['--debugger-args', self._make_shell_string(debugger_args)])
+        if not kwargs["manifest"]:
+            kwargs["manifest"] = os.path.join(*default_manifest[kwargs["suite"]])
         else:
-            if debugger_args:
-                print("--debugger-args passed, but no debugger specified.")
-                return 1
+            manifest, filter = self._find_manifest(kwargs["suite"], kwargs["manifest"])
+            kwargs["manifest"] = manifest
+            if filter is not None:
+                kawargs["filter"] = filter
 
-        if parallel:
-            extra_args.append('--run-tests-in-parallel')
+        if kwargs["suite"] == "jstestbrowser":
+            kwargs["extraProfileFiles"].append(os.path.join(self.topobjdir, "dist",
+                                                            "test-stage", "jsreftest",
+                                                            "tests", "user.js"))
 
-        if shuffle:
-            extra_args.append('--shuffle')
+        if not kwargs["runTestsInParallel"]:
+            kwargs["logFile"] = "%s.log" % kwargs["suite"]
 
-        if e10s:
-            extra_args.append('--e10s')
+        #Remove the stdout handler from the internal logger and let mach deal with it
+        runreftest.log.removeHandler(runreftest.log.handlers[0])
+        self.log_manager.enable_unstructured()
+        rv = runreftest.run(**kwargs)
+        self.log_manager.disable_unstructured()
 
-        if extraPrefs:
-            for pref in extraPrefs:
-                extra_args.extend(['--setpref', pref])
-
-        if this_chunk:
-            extra_args.append('--this-chunk=%s' % this_chunk)
-
-        if total_chunks:
-            extra_args.append('--total-chunks=%s' % total_chunks)
-
-        if extra_args:
-            args = [os.environ.get(b'EXTRA_TEST_ARGS', '')]
-            args.extend(extra_args)
-            env[b'EXTRA_TEST_ARGS'] = ' '.join(args)
-
-        # TODO hook up harness via native Python
-        return self._run_make(directory='.', target=suite, append_env=env,
-            pass_thru=pass_thru, ensure_exit_code=False)
-
-
-def ReftestCommand(func):
-    """Decorator that adds shared command arguments to reftest commands."""
-
-    debugger = CommandArgument('--debugger', metavar='DEBUGGER',
-        help=DEBUGGER_HELP)
-    func = debugger(func)
-
-    debugger_args = CommandArgument('--debugger-args', metavar='DEBUGGER_ARGS',
-        help='Arguments to pass to the debugger.')
-    func = debugger_args(func)
-
-    flter = CommandArgument('--filter', metavar='REGEX',
-        help='A JS regular expression to match test URLs against, to select '
-             'a subset of tests to run.')
-    func = flter(func)
-
-    path = CommandArgument('test_file', nargs='?', metavar='MANIFEST',
-        help='Reftest manifest file, or a directory in which to select '
-             'reftest.list. If omitted, the entire test suite is executed.')
-    func = path(func)
-
-    parallel = CommandArgument('--parallel', action='store_true',
-        help='Run tests in parallel.')
-    func = parallel(func)
-
-    shuffle = CommandArgument('--shuffle', action='store_true',
-        help='Run tests in random order.')
-    func = shuffle(func)
-
-    e10s = CommandArgument('--e10s', action='store_true',
-        help='Use content processes.')
-    func = e10s(func)
-
-    extraPrefs = CommandArgument('--setpref', action='append',
-        default=[], dest='extraPrefs', metavar='PREF=VALUE',
-        help='Set prefs in the reftest profile.')
-    func = extraPrefs(func)
-
-    totalChunks = CommandArgument('--total-chunks',
-        help = 'How many chunks to split the tests up into.')
-    func = totalChunks(func)
-
-    thisChunk = CommandArgument('--this-chunk',
-        help = 'Which chunk to run between 1 and --total-chunks.')
-    func = thisChunk(func)
-
-    return func
+        return rv
 
 def B2GCommand(func):
     """Decorator that adds shared command arguments to b2g reftest commands."""
@@ -416,38 +326,63 @@ def B2GCommand(func):
 
 @CommandProvider
 class MachCommands(MachCommandBase):
-    @Command('reftest', category='testing', description='Run reftests (layout and graphics correctness).')
-    @ReftestCommand
-    def run_reftest(self, test_file, **kwargs):
-        return self._run_reftest(test_file, suite='reftest', **kwargs)
+    @Command('reftest',
+             category='testing',
+             description='Run reftests (layout and graphics correctness).',
+             parser=reftestcommandline.DesktopArgumentsParser)
+    def run_reftest(self, **kwargs):
+        return self._run_reftest(suite='reftest', **kwargs)
 
-    @Command('jstestbrowser', category='testing',
-        description='Run js/src/tests in the browser.')
-    @ReftestCommand
-    def run_jstestbrowser(self, test_file, **kwargs):
-        return self._run_reftest(test_file, suite='jstestbrowser', **kwargs)
+    @Command('jstestbrowser',
+             category='testing',
+             description='Run js/src/tests in the browser.',
+             parser=reftestcommandline.DesktopArgumentsParser)
+    def run_jstestbrowser(self, **kwargs):
+        self._mach_context.commands.dispatch("build",
+                                             self._mach_context,
+                                             what=["stage-jstests"])
+        return self._run_reftest(suite='jstestbrowser', **kwargs)
 
-    @Command('reftest-ipc', category='testing',
-        description='Run IPC reftests (layout and graphics correctness, separate process).')
-    @ReftestCommand
-    def run_ipc(self, test_file, **kwargs):
-        return self._run_reftest(test_file, suite='reftest-ipc', **kwargs)
+    @Command('reftest-ipc',
+             category='testing',
+             description='Run IPC reftests (layout and graphics correctness, separate process).',
+             parser=reftestcommandline.DesktopArgumentsParser)
+    def run_ipc(self, **kwargs):
+        kwargs["extraPrefs"] += self._prefs_oop()
+        return self._run_reftest(suite='reftest-ipc', **kwargs)
 
-    @Command('crashtest', category='testing',
-        description='Run crashtests (Check if crashes on a page).')
-    @ReftestCommand
-    def run_crashtest(self, test_file, **kwargs):
-        return self._run_reftest(test_file, suite='crashtest', **kwargs)
+    @Command('crashtest',
+             category='testing',
+             description='Run crashtests (Check if crashes on a page).',
+             parser=reftestcommandline.DesktopArgumentsParser)
+    def run_crashtest(self, **kwargs):
+        return self._run_reftest(suite='crashtest', **kwargs)
 
-    @Command('crashtest-ipc', category='testing',
-        description='Run IPC crashtests (Check if crashes on a page, separate process).')
-    @ReftestCommand
-    def run_crashtest_ipc(self, test_file, **kwargs):
-        return self._run_reftest(test_file, suite='crashtest-ipc', **kwargs)
+    @Command('crashtest-ipc',
+             category='testing',
+             description='Run IPC crashtests (Check if crashes on a page, separate process).',
+             parser=reftestcommandline.DesktopArgumentsParser)
+    def run_crashtest_ipc(self, **kwargs):
+        kwargs["extraPrefs"] += self._prefs_oop()
+        return self._run_reftest(suite='crashtest-ipc', **kwargs)
 
-    def _run_reftest(self, test_file=None, suite=None, **kwargs):
+
+    def _prefs_oop(self):
+        prefs = ["layers.async-pan-zoom.enabled=true",
+                 "browser.tabs.remote.autostart=true"]
+        if mozinfo.os() == "win":
+            prefs.append("layers.acceleration.disabled=true")
+
+        return prefs
+
+    def _prefs_gpu(self):
+        if mozinfo.os() != "win":
+            return ["layers.acceleration.force-enabled=true"]
+        return []
+
+    def _run_reftest(self, suite=None, **kwargs):
         reftest = self._spawn(ReftestRunner)
-        return reftest.run_desktop_test(test_file, suite=suite, **kwargs)
+        return reftest.run_desktop_test(suite=suite, **kwargs)
 
 
 # TODO For now b2g commands will only work with the emulator,
