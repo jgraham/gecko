@@ -3,6 +3,7 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import ConfigParser
+import json
 import os
 import sys
 import tempfile
@@ -229,10 +230,9 @@ class B2GRemoteReftest(RefTest):
             pass
 
 
-    def createReftestProfile(self, options, reftestlist):
-        profile = RefTest.createReftestProfile(self, options, reftestlist,
-                                               server=options.remoteWebServer,
-                                               special_powers=False)
+    def createReftestProfile(self, options, manifests):
+        profile = RefTest.createReftestProfile(self, options, manifests,
+                                               server=options.remoteWebServer)
         profileDir = profile.profile
 
         prefs = {}
@@ -248,7 +248,7 @@ class B2GRemoteReftest(RefTest):
         prefs["network.dns.localDomains"] = "app://test-container.gaiamobile.org"
         prefs["reftest.browser.iframe.enabled"] = False
         prefs["reftest.remote"] = True
-        prefs["reftest.uri"] = "%s" % reftestlist
+
         # Set a future policy version to avoid the telemetry prompt.
         prefs["toolkit.telemetry.prompted"] = 999
         prefs["toolkit.telemetry.notifiedOptOut"] = 999
@@ -305,9 +305,6 @@ class B2GRemoteReftest(RefTest):
         except DMError:
             print "Automation Error: Failed to copy extra files to device"
             raise
-
-    def getManifestPath(self, path):
-        return path
 
     def environment(self, **kwargs):
      return self.automation.environment(**kwargs)
@@ -436,14 +433,13 @@ def run_remote_reftests(parser, options, args):
     reftest.stopWebServer(options)
     return retVal
 
-def main(args=sys.argv[1:]):
+def main():
     parser = B2GArgumentParser()
-    options = parser.parse_args(args)
+    options = parser.parse_args()
 
-    args = [options.manifest]
     if options.desktop or options.mulet:
-        return run_desktop_reftests(parser, options, args)
-    return run_remote_reftests(parser, options, args)
+        return run_desktop_reftests(parser, options)
+    return run_remote_reftests(parser, options)
 
 
 if __name__ == "__main__":

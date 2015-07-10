@@ -81,38 +81,6 @@ class ReftestRunner(MozbuildObject):
         self.tests_dir = os.path.join(self.topobjdir, '_tests')
         self.reftest_dir = os.path.join(self.tests_dir, 'reftest')
 
-    def _manifest_file(self, suite):
-        """Returns the manifest file used for a given test suite."""
-        files = {
-            'reftest': 'reftest.list',
-            'reftest-ipc': 'reftest.list',
-            'crashtest': 'crashtests.list',
-            'crashtest-ipc': 'crashtests.list',
-            'jstestbrowser': 'jstests.list'
-        }
-        assert suite in files
-        return files[suite]
-
-    def _find_manifest(self, suite, test_file):
-        """Return a tuple of (manifest-path, filter-string) for running test_file.
-
-        test_file can be a relative path to a single test file or manifest from
-        the top source directory, an absolute path to the same, or a directory
-        containing a manifest.
-        """
-        assert test_file
-        path_arg = self._wrap_path_argument(test_file)
-        relpath = path_arg.relpath()
-
-        if os.path.isdir(path_arg.srcdir_path()):
-            return (mozpath.join(relpath, self._manifest_file(suite)), None)
-
-        if relpath.endswith('.list'):
-            return (relpath, None)
-
-        return (self._find_manifest(suite, mozpath.dirname(test_file))[0],
-                mozpath.basename(test_file))
-
     def _make_shell_string(self, s):
         return "'%s'" % re.sub("'", r"'\''", s)
 
@@ -248,13 +216,8 @@ class ReftestRunner(MozbuildObject):
         kwargs["extraProfileFiles"] = [os.path.join(self.topobjdir, "dist", "plugins")]
         kwargs["symbolsPath"] = os.path.join(self.topobjdir, "crashreporter-symbols")
 
-        if not kwargs["manifest"]:
-            kwargs["manifest"] = os.path.join(*default_manifest[kwargs["suite"]])
-        else:
-            manifest, filter = self._find_manifest(kwargs["suite"], kwargs["manifest"])
-            kwargs["manifest"] = manifest
-            if filter is not None:
-                kawargs["filter"] = filter
+        if not kwargs["tests"]:
+            kwargs["tests"] = [os.path.join(*default_manifest[kwargs["suite"]])]
 
         if kwargs["suite"] == "jstestbrowser":
             kwargs["extraProfileFiles"].append(os.path.join(self.topobjdir, "dist",

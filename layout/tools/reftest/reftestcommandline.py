@@ -162,10 +162,10 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
                           metavar="PREF=VALUE",
                           help="defines an extra user preference")
 
-        self.add_argument("manifest",
-                          metavar="MANIFEST_PATH",
-                          nargs="?",
-                          help="Path to test manifest file")
+        self.add_argument("tests",
+                          metavar="TEST_PATH",
+                          nargs="*",
+                          help="Path to test file, manifest file, or directory containing tests")
 
     def validate(self, options, reftest):
         if options.totalChunks is not None and options.thisChunk is None:
@@ -236,8 +236,8 @@ class DesktopArgumentsParser(ReftestArgumentsParser):
         except ImportError:
             build_obj = None
 
-        if not options.manifest:
-            self.error("No reftest.list specified.")
+        if not options.tests:
+            self.error("No test files specified.")
 
         if options.app is None:
             bin_dir = (build_obj.get_binary_path() if
@@ -496,7 +496,7 @@ class B2GArgumentParser(ReftestArgumentsParser):
 class RemoteArgumentsParser(ReftestArgumentsParser):
     def __init__(self, **kwargs):
         import moznetwork
-        super(RemoteArgumentsParser).__init__()
+        super(RemoteArgumentsParser, self).__init__()
 
         # app, xrePath and utilityPath variables are set in main function
         self.set_defaults({"logFile": "reftest.log",

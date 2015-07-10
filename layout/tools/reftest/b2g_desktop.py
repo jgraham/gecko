@@ -51,12 +51,10 @@ class B2GDesktopReftest(RefTest):
             f.close()
         self.marionette.execute_script(self.test_script)
 
-    def run_tests(self, test_path, options):
-        reftestlist = self.getManifestPath(test_path)
-        if not reftestlist.startswith('file://'):
-            reftestlist = 'file://%s' % reftestlist
+    def run_tests(self, tests, options):
+        manifests = self.resolveManifests(manifests)
 
-        self.profile = self.create_profile(options, reftestlist,
+        self.profile = self.create_profile(options, manifests,
                                            profile_to_clone=options.profile)
         env = self.buildBrowserEnv(options, self.profile.profile)
         kp_kwargs = { 'processOutputLine': [self._on_output],
@@ -107,8 +105,8 @@ class B2GDesktopReftest(RefTest):
         log.info("%s | Running tests: end.", os.path.basename(__file__))
         return status
 
-    def create_profile(self, options, reftestlist, profile_to_clone=None):
-        profile = RefTest.createReftestProfile(self, options, reftestlist,
+    def create_profile(self, options, manifests, profile_to_clone=None):
+        profile = RefTest.createReftestProfile(self, options, manifests,
                                                profile_to_clone=profile_to_clone)
 
         prefs = {}
@@ -192,7 +190,7 @@ class MuletReftest(B2GDesktopReftest):
         Wait(self.marionette, timeout).until(expected.element_present(
             By.CSS_SELECTOR, '#homescreen[loading-state=false]'))
 
-def run_desktop_reftests(parser, options, args):
+def run_desktop_reftests(parser, options):
     marionette_args = {}
     if options.marionette:
         host, port = options.marionette.split(':')
@@ -217,4 +215,4 @@ def run_desktop_reftests(parser, options, args):
     if options.desktop and not options.profile:
         raise Exception("must specify --profile when specifying --desktop")
 
-    sys.exit(reftest.run_tests(args[0], options))
+    sys.exit(reftest.run_tests(options.tests, options))

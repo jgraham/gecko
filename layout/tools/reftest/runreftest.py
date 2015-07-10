@@ -7,6 +7,7 @@ Runs the reftest test harness.
 """
 
 import collections
+import json
 import multiprocessing
 import os
 import re
@@ -153,30 +154,62 @@ class RefTest(object):
         "Get an absolute path relative to self.oldcwd."
         return os.path.normpath(os.path.join(self.oldcwd, os.path.expanduser(path)))
 
-    def getManifestPath(self, path):
-        "Get the path of the manifest, and for remote testing this function is subclassed to point to remote manifest"
-        path = self.getFullPath(path)
-        if os.path.isdir(path):
-            defaultManifestPath = os.path.join(path, 'reftest.list')
-            if os.path.exists(defaultManifestPath):
-                path = defaultManifestPath
-            else:
-                defaultManifestPath = os.path.join(path, 'crashtests.list')
-                if os.path.exists(defaultManifestPath):
-                    path = defaultManifestPath
-        return path
+    def defaultManifest(self, suite):
+        return {"reftest": "reftest.list",
+                "reftest-ipc": "reftest.list",
+                "crashtest": "crashtest.list",
+                "crashtest-ipc": "crashtest.list",
+                "jstestbrowser": "jstests.list"}[suite]
+
+    def findManifest(self, suite, test_file):
+        """Return a tuple of (manifest-path, filter-string) for running test_file.
+
+        test_file is a path to a test or a manifest file
+        """
+        if not os.path.isabs(test_file):
+            test_file = os.path.abspath(test_file)
+
+        if os.path.isdir(test_file):
+            return os.path.join(test_file, self.defaultManifest(suite)), None
+
+        if test_file.endswith('.list'):
+            return test_file, None
+
+        return (self.findManifest(suite, os.path.dirname(test_file))[0],
+                r".*(?:/|\\)%s$" % os.path.basename(test_file))
+
+    def manifestURL(self, options, path):
+        return "file://%s" % path
+
+    def resolveManifests(self, options, tests):
+        suite = options.suite
+        manifests = {}
+        for testPath in tests:
+            manifest, filter_str = self.findManifest(suite, testPath)
+            manifest = self.manifestURL(options, manifest)
+            if manifest not in manifests:
+                manifests[manifest] = set()
+            if filter_str is not None:
+                manifests[manifest].add(filter_str)
+
+        for key in manifests.iterkeys():
+            manifests[key] = sorted(list(manifests[key]))
+
+
+        return manifests
 
     def makeJSString(self, s):
         return '"%s"' % re.sub(r'([\\"])', r'\\\1', s)
 
-    def createReftestProfile(self, options, manifest, server='localhost', port=0,
-                             special_powers=True, profile_to_clone=None):
-        """
-          Sets up a profile for reftest.
-          'manifest' is the path to the reftest.list file we want to test with.  This is used in
-          the remote subclass in remotereftest.py so we can write it to a preference for the
-          bootstrap extension.
-        """
+    def createReftestProfile(self, options, manifests, server='localhost', port=0,
+                             profile_to_clone=None):
+        """Sets up a profile for reftest.
+
+        :param options: Object containing command line options
+        :param manifests: Dictionary of the form {manifest_path: [filters]}
+        :param server: Server name to use for http tests
+        :param profile_to_clone: Path to a profile to use as the basis for the
+                                 test profile"""
 
         locations = mozprofile.permissions.ServerLocations()
         locations.add_host(server, scheme='http', port=port)
@@ -195,12 +228,10 @@ class RefTest(object):
             prefs['reftest.logFile'] = options.logFile
         if options.ignoreWindowSize:
             prefs['reftest.ignoreWindowSize'] = True
-        if options.filter:
-            prefs['reftest.filter'] = options.filter
         if options.shuffle:
             prefs['reftest.shuffle'] = True
         prefs['reftest.focusFilterMode'] = options.focusFilterMode
-        prefs['reftest.uri'] = "file://%s" % os.path.abspath(manifest)
+        prefs['reftest.manifests'] = json.dumps(manifests)
 
         # Ensure that telemetry is disabled, so we don't connect to the telemetry
         # server in the middle of the tests.
@@ -326,7 +357,7 @@ class RefTest(object):
         if profileDir:
             shutil.rmtree(profileDir, True)
 
-    def runTests(self, testPath, options, cmdlineArgs=None):
+    def runTests(self, tests, options, cmdlineArgs=None):
         # Despite our efforts to clean up servers started by this script, in practice
         # we still see infrequent cases where a process is orphaned and interferes
         # with future tests, typically because the old server is keeping the port in use.
@@ -335,8 +366,12 @@ class RefTest(object):
         self.killNamedOrphans('ssltunnel')
         self.killNamedOrphans('xpcshell')
 
+        manifests = self.resolveManifests(options.suite, tests)
+        if options.filter:
+            manifests[""] = options.filter
+
         if not options.runTestsInParallel:
-            return self.runSerialTests(testPath, options, cmdlineArgs)
+            return self.runSerialTests(manifests, options, cmdlineArgs)
 
         cpuCount = multiprocessing.cpu_count()
 
@@ -629,7 +664,7 @@ class RefTest(object):
             status = 1
         return status
 
-    def runSerialTests(self, testPath, options, cmdlineArgs=None):
+    def runSerialTests(self, manifests, options, cmdlineArgs=None):
         debuggerInfo = None
         if options.debugger:
             debuggerInfo = mozdebug.get_debugger_info(options.debugger, options.debuggerArgs,
@@ -637,10 +672,9 @@ class RefTest(object):
 
         profileDir = None
         try:
-            reftestlist = self.getManifestPath(testPath)
             if cmdlineArgs == None:
                 cmdlineArgs = []
-            profile = self.createReftestProfile(options, reftestlist)
+            profile = self.createReftestProfile(options, manifests)
             profileDir = profile.profile  # name makes more sense
 
             # browser environment
@@ -691,10 +725,10 @@ def run(**kwargs):
     parser = reftestcommandline.DesktopArgumentsParser()
     reftest = RefTest()
     parser.set_defaults(**kwargs)
-    options = parser.parse_args([kwargs["manifest"]])
+    options = parser.parse_args(kwargs["tests"])
     parser.validate(options, reftest)
     print options
-    return reftest.runTests(options.manifest, options)
+    return reftest.runTests(options.tests, options)
 
 
 def main():
@@ -704,7 +738,7 @@ def main():
     options = parser.parse_args()
     parser.validate(options, reftest)
 
-    sys.exit(reftest.runTests(options.manifest, options))
+    sys.exit(reftest.runTests(options.tests, options))
 
 
 if __name__ == "__main__":

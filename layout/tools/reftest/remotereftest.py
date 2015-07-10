@@ -127,6 +127,12 @@ class RemoteReftest(RefTest):
         self.automation.deleteANRs()
         self.automation.deleteTombstones()
 
+    def manifestURL(self, options, path):
+        # Dynamically build the reftest URL if possible, beware that args[0] should exist 'inside' the webroot
+        relPath = os.path.relpath(path, SCRIPT_DIRECTORY)
+        assert ".." not in relPath
+        return "http://%s:%s/%s" % (options.remoteWebServer, options.httpPort, relPath)
+
     def findPath(self, paths, filename = None):
         for path in paths:
             p = path
@@ -190,8 +196,12 @@ class RemoteReftest(RefTest):
     def stopWebServer(self, options):
         self.server.stop()
 
-    def createReftestProfile(self, options, reftestlist):
-        profile = RefTest.createReftestProfile(self, options, reftestlist, server=options.remoteWebServer, port=options.httpPort)
+    def createReftestProfile(self, options, manifest):
+        profile = RefTest.createReftestProfile(self,
+                                               options,
+                                               manifest,
+                                               server=options.remoteWebServer,
+                                               port=options.httpPort)
         profileDir = profile.profile
 
         prefs = {}
@@ -203,7 +213,6 @@ class RemoteReftest(RefTest):
         # Set a future policy version to avoid the telemetry prompt.
         prefs["toolkit.telemetry.prompted"] = 999
         prefs["toolkit.telemetry.notifiedOptOut"] = 999
-        prefs["reftest.uri"] = "%s" % reftestlist
         prefs["datareporting.policy.dataSubmissionPolicyBypassAcceptance"] = True
 
         # Point the url-classifier to the local testing server for fast failures
@@ -252,9 +261,6 @@ class RemoteReftest(RefTest):
         except devicemanager.DMError:
             print "Automation Error: Failed to copy extra files to device"
             raise
-
-    def getManifestPath(self, path):
-        return path
 
     def printDeviceInfo(self, printLogcat=False):
         try:
@@ -316,10 +322,10 @@ class RemoteReftest(RefTest):
             except:
                 print "Warning: cleaning up pidfile '%s' was unsuccessful from the test harness" % self.pidFile
 
-def main(args):
+def main():
     automation = RemoteAutomation(None)
-    parser = RemoteOptions(automation)
-    options, args = parser.parse_args()
+    parser = reftestcommandline.RemoteArgumentsParser()
+    options = parser.parse_args()
 
     if (options.dm_trans == 'sut' and options.deviceIP == None):
         print "Error: If --dm_trans = sut, you must provide a device IP to connect to via the --deviceIP option"
@@ -360,17 +366,6 @@ def main(args):
     # Hack in a symbolic link for jsreftest
     os.system("ln -s ../jsreftest " + str(os.path.join(SCRIPT_DIRECTORY, "jsreftest")))
 
-    # Dynamically build the reftest URL if possible, beware that args[0] should exist 'inside' the webroot
-    manifest = args[0]
-    if os.path.exists(os.path.join(SCRIPT_DIRECTORY, args[0])):
-        manifest = "http://" + str(options.remoteWebServer) + ":" + str(options.httpPort) + "/" + args[0]
-    elif os.path.exists(args[0]):
-        manifestPath = os.path.abspath(args[0]).split(SCRIPT_DIRECTORY)[1].strip('/')
-        manifest = "http://" + str(options.remoteWebServer) + ":" + str(options.httpPort) + "/" + manifestPath
-    else:
-        print "ERROR: Could not find test manifest '%s'" % manifest
-        return 1
-
     # Start the webserver
     retVal = reftest.startWebServer(options)
     if retVal:
@@ -386,11 +381,8 @@ def main(args):
 #    manifest = "http://" + options.remoteWebServer + "/reftests/layout/reftests/reftest-sanity/reftest.list"
     retVal = 0
     try:
-        cmdlineArgs = ["-reftest", manifest]
-        if options.bootstrap:
-            cmdlineArgs = []
         dm.recordLogcat()
-        retVal = reftest.runTests(manifest, options, cmdlineArgs)
+        retVal = reftest.runTests(options.tests, options)
     except:
         print "Automation Error: Exception caught while running tests"
         traceback.print_exc()
