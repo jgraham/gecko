@@ -9,7 +9,7 @@ import sys
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-from runreftest import RefTest, ReftestOptions
+from runreftest import RefTest
 
 from marionette_driver import expected
 from marionette_driver.by import By

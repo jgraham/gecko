@@ -12,7 +12,6 @@ import traceback
 SCRIPT_DIRECTORY = os.path.abspath(os.path.realpath(os.path.dirname(sys.argv[0])))
 
 from runreftest import RefTest
-from runreftest import ReftestOptions
 from automation import Automation
 import devicemanager
 import droid
@@ -126,6 +125,10 @@ class RemoteReftest(RefTest):
             self.SERVER_STARTUP_TIMEOUT = 90
         self.automation.deleteANRs()
         self.automation.deleteTombstones()
+
+    def absManifestPath(self, path):
+        print SCRIPT_DIRECTORY
+        return os.path.join(SCRIPT_DIRECTORY, path)
 
     def manifestURL(self, options, path):
         # Dynamically build the reftest URL if possible, beware that args[0] should exist 'inside' the webroot

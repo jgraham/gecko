@@ -167,7 +167,7 @@ class RefTest(object):
         test_file is a path to a test or a manifest file
         """
         if not os.path.isabs(test_file):
-            test_file = os.path.abspath(test_file)
+            test_file = self.absManifestPath(test_file)
 
         if os.path.isdir(test_file):
             return os.path.join(test_file, self.defaultManifest(suite)), None
@@ -177,6 +177,9 @@ class RefTest(object):
 
         return (self.findManifest(suite, os.path.dirname(test_file))[0],
                 r".*(?:/|\\)%s$" % os.path.basename(test_file))
+
+    def absManifestPath(self, path):
+        return os.path.abspath(path)
 
     def manifestURL(self, options, path):
         return "file://%s" % path
@@ -292,6 +295,8 @@ class RefTest(object):
         for f in options.extensionsToInstall:
             addons.append(self.getFullPath(f))
 
+        print addons
+
         kwargs = {'addons': addons,
                   'preferences': prefs,
                   'locations': locations}
@@ -366,11 +371,11 @@ class RefTest(object):
         self.killNamedOrphans('ssltunnel')
         self.killNamedOrphans('xpcshell')
 
-        manifests = self.resolveManifests(options.suite, tests)
+        manifests = self.resolveManifests(options, tests)
         if options.filter:
             manifests[""] = options.filter
 
-        if not options.runTestsInParallel:
+        if not hasattr(options, "runTestsInParallel") or not options.runTestsInParallel:
             return self.runSerialTests(manifests, options, cmdlineArgs)
 
         cpuCount = multiprocessing.cpu_count()

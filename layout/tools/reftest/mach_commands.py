@@ -80,6 +80,7 @@ class ReftestRunner(MozbuildObject):
 
         self.tests_dir = os.path.join(self.topobjdir, '_tests')
         self.reftest_dir = os.path.join(self.tests_dir, 'reftest')
+        print self.reftest_dir
 
     def _make_shell_string(self, s):
         return "'%s'" % re.sub("'", r"'\''", s)
@@ -112,14 +113,6 @@ class ReftestRunner(MozbuildObject):
             test_file = mozpath.relpath(os.path.abspath(test_file),
                                              self.topsrcdir)
 
-        (manifest, single_file_filter) = self._find_manifest(suite, test_file)
-        if not os.path.exists(mozpath.join(self.topsrcdir, manifest)):
-            raise Exception('No manifest file was found at %s.' % manifest)
-        if single_file_filter:
-            if filter:
-                raise Exception('Cannot run single files in conjunction with --filter')
-            filter = single_file_filter
-
         # Need to chdir to reftest_dir otherwise imports fail below.
         os.chdir(self.reftest_dir)
 
@@ -135,15 +128,18 @@ class ReftestRunner(MozbuildObject):
             import reftest
 
         # Set up the reftest options.
-        parser = reftest.B2GOptions()
-        options, args = parser.parse_args([])
+        parser = reftestcommandline.B2GArgumentParser()
+        options = parser.parse_args([])
+
+        #TODO Hmmm
+        options.suite = suite
 
         # Tests need to be served from a subdirectory of the server. Symlink
         # topsrcdir here to get around this.
         tests = os.path.join(self.reftest_dir, 'tests')
         if not os.path.isdir(tests):
             os.symlink(self.topsrcdir, tests)
-        args.insert(0, os.path.join('tests', manifest))
+#        args.insert(0, os.path.join('tests', manifest))
 
         for k, v in kwargs.iteritems():
             setattr(options, k, v)
@@ -174,7 +170,7 @@ class ReftestRunner(MozbuildObject):
             if not os.path.isfile(options.app):
                 options.app = options.app[:-len('-bin')]
 
-            return reftest.run_desktop_reftests(parser, options, args)
+            return reftest.run_desktop_reftests(parser, options)
 
 
         try:
@@ -194,7 +190,7 @@ class ReftestRunner(MozbuildObject):
         if suite == 'reftest':
             options.oop = True
 
-        return reftest.run_remote_reftests(parser, options, args)
+        return reftest.run_remote_reftests(parser, options)
 
     def run_desktop_test(self, **kwargs):
         """Runs a reftest."""

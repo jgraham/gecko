@@ -3,7 +3,6 @@
 # You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import ConfigParser
-import json
 import os
 import sys
 import tempfile
@@ -11,18 +10,19 @@ import traceback
 
 # We need to know our current directory so that we can serve our test files from it.
 here = os.path.abspath(os.path.dirname(__file__))
+if here not in sys.path:
+    sys.path.insert(0, here)
+print here
 
+from automation import Automation
 from b2gautomation import B2GRemoteAutomation
 from b2g_desktop import run_desktop_reftests
 from runreftest import RefTest
-from runreftest import ReftestOptions
 from remotereftest import ReftestServer
+import reftestcommandline
 
 from mozdevice import DeviceManagerADB, DMError
 from marionette import Marionette
-import moznetwork
-
-import reftestcommandline
 
 class ProfileConfigParser(ConfigParser.RawConfigParser):
     """Subclass of RawConfigParser that outputs .ini files in the exact
@@ -324,7 +324,7 @@ class B2GRemoteReftest(RefTest):
         return status
 
 
-def run_remote_reftests(parser, options, args):
+def run_remote_reftests(parser, options):
     auto = B2GRemoteAutomation(None, "fennec", context_chrome=True)
 
     # create our Marionette instance
@@ -394,16 +394,6 @@ def run_remote_reftests(parser, options, args):
     # Hack in a symbolic link for jsreftest
     os.system("ln -s %s %s" % (os.path.join('..', 'jsreftest'), os.path.join(here, 'jsreftest')))
 
-    # Dynamically build the reftest URL if possible, beware that args[0] should exist 'inside' the webroot
-    manifest = args[0]
-    if os.path.exists(os.path.join(here, args[0])):
-        manifest = "http://%s:%s/%s" % (options.remoteWebServer, options.httpPort, args[0])
-    elif os.path.exists(args[0]):
-        manifestPath = os.path.abspath(args[0]).split(here)[1].strip('/')
-        manifest = "http://%s:%s/%s" % (options.remoteWebServer, options.httpPort, manifestPath)
-    else:
-        print "ERROR: Could not find test manifest '%s'" % manifest
-        return 1
 
     # Start the webserver
     retVal = 1
@@ -415,11 +405,7 @@ def run_remote_reftests(parser, options, args):
         if (dm.processExist(procName)):
             dm.killProcess(procName)
 
-        cmdlineArgs = ["-reftest", manifest]
-        if getattr(options, 'bootstrap', False):
-            cmdlineArgs = []
-
-        retVal = reftest.runTests(manifest, options, cmdlineArgs)
+        retVal = reftest.runTests(options.tests, options)
     except:
         print "Automation Error: Exception caught while running tests"
         traceback.print_exc()
@@ -434,7 +420,7 @@ def run_remote_reftests(parser, options, args):
     return retVal
 
 def main():
-    parser = B2GArgumentParser()
+    parser = reftestcommandline.B2GArgumentParser()
     options = parser.parse_args()
 
     if options.desktop or options.mulet:

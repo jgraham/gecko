@@ -4,9 +4,16 @@ from urlparse import urlparse
 
 here = os.path.abspath(os.path.dirname(__file__))
 
+
 class ReftestArgumentsParser(argparse.ArgumentParser):
     def __init__(self, **kwargs):
         super(ReftestArgumentsParser, self).__init__(**kwargs)
+
+        try:
+            from mozbuild.base import MozbuildObject
+            self.build_obj = MozbuildObject.from_environment(cwd=here)
+        except ImportError:
+            self.build_obj = None
 
         self.add_argument("--xre-path",
                           action="store",
@@ -162,6 +169,16 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
                           metavar="PREF=VALUE",
                           help="defines an extra user preference")
 
+        self.add_argument("--reftest-extension-path",
+                          action="store",
+                          dest="reftestExtensionPath",
+                          help="Path to the reftest extension")
+
+        self.add_argument("--special-powers-extension-path",
+                          action="store",
+                          dest="specialPowersExtensionPath",
+                          help="Path to the special powers extension")
+
         self.add_argument("tests",
                           metavar="TEST_PATH",
                           nargs="*",
@@ -169,7 +186,8 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
 
     def validate(self, options, reftest):
         if options.totalChunks is not None and options.thisChunk is None:
-            self.error("thisChunk must be specified when totalChunks is specified")
+            self.error(
+                "thisChunk must be specified when totalChunks is specified")
 
         if options.totalChunks:
             if not 1 <= options.thisChunk <= options.totalChunks:
@@ -186,15 +204,21 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
                            options.xrePath)
             options.xrePath = reftest.getFullPath(options.xrePath)
 
-        if options.runTestsInParallel:
-            if options.logFile is not None:
-                self.error("cannot specify logfile with parallel tests")
-            if options.totalChunks is not None and options.thisChunk is None:
-                self.error("cannot specify thisChunk or totalChunks with parallel tests")
-            if options.focusFilterMode != "all":
-                self.error("cannot specify focusFilterMode with parallel tests")
-            if options.debugger is not None:
-                self.error("cannot specify a debugger with parallel tests")
+        if options.reftestExtensionPath is None:
+            if self.build_obj is not None:
+                options.reftestExtensionPath = os.path.join(self.build_obj.topobjdir, "_tests",
+                                                            "reftest", "reftest")
+            else:
+                options.reftestExtensionPath = os.path.join(here, "reftest")
+
+        if (options.specialPowersExtensionPath is None and
+            options.suite in ["crashtests", "crashtests-ipc", "jstestbrowser"]):
+            if self.build_obj is not None:
+                options.specialPowersExtensionPath = os.path.join(self.build_obj.topobjdir, "_tests",
+                                                                  "reftest", "specialpowers")
+            else:
+                options.specialPowersExtensionPath = os.path.join(
+                    here, "specialpowers")
 
         options.leakThresholds = {
             "default": options.defaultLeakThreshold,
@@ -218,57 +242,40 @@ class DesktopArgumentsParser(ReftestArgumentsParser):
                           dest="runTestsInParallel",
                           help="run tests in parallel if possible")
 
-        self.add_argument("--reftest-extension-path",
-                          action="store",
-                          dest="reftestExtensionPath",
-                          help="Path to the reftest extension")
-
-        self.add_argument("--special-powers-extension-path",
-                          action="store",
-                          dest="specialPowersExtensionPath",
-                          help="Path to the special powers extension")
-
     def validate(self, options, reftest):
         super(DesktopArgumentsParser, self).validate(options, reftest)
-        try:
-            from mozbuild.base import MozbuildObject
-            build_obj = MozbuildObject.from_environment(cwd=here)
-        except ImportError:
-            build_obj = None
+
+        if options.runTestsInParallel:
+            if options.logFile is not None:
+                self.error("cannot specify logfile with parallel tests")
+            if options.totalChunks is not None and options.thisChunk is None:
+                self.error(
+                    "cannot specify thisChunk or totalChunks with parallel tests")
+            if options.focusFilterMode != "all":
+                self.error("cannot specify focusFilterMode with parallel tests")
+            if options.debugger is not None:
+                self.error("cannot specify a debugger with parallel tests")
 
         if not options.tests:
             self.error("No test files specified.")
 
         if options.app is None:
-            bin_dir = (build_obj.get_binary_path() if
-                       build_obj and build_obj.substs['MOZ_BUILD_APP'] != 'mobile/android'
+            bin_dir = (self.build_obj.get_binary_path() if
+                       self.build_obj and self.build_obj.substs[
+                           'MOZ_BUILD_APP'] != 'mobile/android'
                        else None)
 
             if bin_dir:
                 options.app = bin_dir
             else:
-                self.error("could not find the application path, --appname must be specified")
-
-        if options.reftestExtensionPath is None:
-            if build_obj is not None:
-                options.reftestExtensionPath = os.path.join(build_obj.topobjdir, "_tests",
-                                                            "reftest", "reftest")
-            else:
-                options.reftestExtensionPath = os.path.join(here, "reftest")
-
-        if (options.specialPowersExtensionPath is None and
-            options.suite in ["crashtests", "crashtests-ipc", "jstestbrowser"]):
-            if build_obj is not None:
-                options.specialPowersExtensionPath = os.path.join(build_obj.topobjdir, "_tests",
-                                                                  "reftest", "specialpowers")
-            else:
-                options.specialPowersExtensionPath = os.path.join(here, "specialpowers")
+                self.error(
+                    "could not find the application path, --appname must be specified")
 
         options.app = reftest.getFullPath(options.app)
         if not os.path.exists(options.app):
             self.error("""Error: Path %(app)s doesn't exist.
-            Are you executing $objdir/_tests/reftest/runreftest.py?""" \
-                % {"app": options.app})
+            Are you executing $objdir/_tests/reftest/runreftest.py?"""
+                       % {"app": options.app})
 
         if options.xrePath is None:
             options.xrePath = os.path.dirname(options.app)
@@ -278,102 +285,99 @@ class DesktopArgumentsParser(ReftestArgumentsParser):
 
         options.utilityPath = reftest.getFullPath(options.utilityPath)
 
-class B2GArgumentParser(ReftestArgumentsParser):
 
+class B2GArgumentParser(ReftestArgumentsParser):
     def __init__(self, **kwargs):
-        super(ReftestArgumentsParser, self).__init__(**kwargs)
+        super(B2GArgumentParser, self).__init__(**kwargs)
 
         from automation import Automation
 
-        # This is only used for procName in run_remote_reftests.
-        defaults["app"] = Automation.DEFAULT_APP
-
         self.add_argument("--browser-arg",
                           action="store",
-                          type = "string",
-                          dest = "browser_arg",
-                          help = "Optional command-line arg to pass to the browser")
+                          type=str,
+                          dest="browser_arg",
+                          help="Optional command-line arg to pass to the browser")
 
         self.add_argument("--b2gpath",
                           action="store",
-                          type = "string",
-                          dest = "b2gPath",
-                          help = "path to B2G repo or qemu dir")
+                          type=str,
+                          dest="b2gPath",
+                          help="path to B2G repo or qemu dir")
 
         self.add_argument("--marionette",
                           action="store",
-                          type = "string",
-                          dest = "marionette",
-                          help = "host:port to use when connecting to Marionette")
+                          type=str,
+                          dest="marionette",
+                          help="host:port to use when connecting to Marionette")
 
         self.add_argument("--emulator",
                           action="store",
                           type=str,
-                          dest = "emulator",
-                          help = "Architecture of emulator to use: x86 or arm")
+                          dest="emulator",
+                          help="Architecture of emulator to use: x86 or arm")
 
         self.add_argument("--emulator-res",
                           action="store",
                           type=str,
-                          dest = "emulator_res",
-                          help = "Emulator resolution of the format '<width>x<height>'")
+                          dest="emulator_res",
+                          help="Emulator resolution of the format '<width>x<height>'")
 
         self.add_argument("--no-window",
                           action="store_true",
-                          dest = "noWindow",
+                          dest="noWindow",
                           default=False,
-                          help = "Pass --no-window to the emulator")
+                          help="Pass --no-window to the emulator")
 
         self.add_argument("--adbpath",
                           action="store",
-                          type = "string",
-                          dest = "adb_path",
+                          type=str,
+                          dest="adb_path",
                           default="adb",
-                          help = "path to adb")
+                          help="path to adb")
 
         self.add_argument("--deviceIP",
                           action="store",
-                          type = "string",
-                          dest = "deviceIP",
-                          help = "ip address of remote device to test")
+                          type=str,
+                          dest="deviceIP",
+                          help="ip address of remote device to test")
 
         self.add_argument("--devicePort",
                           action="store",
-                          type = "string",
-                          dest = "devicePort",
+                          type=str,
+                          dest="devicePort",
                           default="20701",
-                          help = "port of remote device to test")
+                          help="port of remote device to test")
 
         self.add_argument("--remote-logfile",
                           action="store",
-                          type = "string",
-                          dest = "remoteLogFile",
-                          help = "Name of log file on the device relative to the device root.  PLEASE ONLY USE A FILENAME.")
+                          type=str,
+                          dest="remoteLogFile",
+                          help="Name of log file on the device relative to the device root.  PLEASE ONLY USE A FILENAME.")
 
         self.add_argument("--remote-webserver",
-                          action = "store",
-                          type = "string",
-                          dest = "remoteWebServer",
-                          help = "ip address where the remote web server is hosted at")
+                          action="store",
+                          type=str,
+                          dest="remoteWebServer",
+                          help="ip address where the remote web server is hosted at")
 
         self.add_argument("--http-port",
-                          action = "store",
-                          type = "string",
-                          dest = "httpPort",
-                          help = "ip address where the remote web server is hosted at")
+                          action="store",
+                          type=str,
+                          dest="httpPort",
+                          help="ip address where the remote web server is hosted at")
 
         self.add_argument("--ssl-port",
-                          action = "store",
-                          type = "string",
-                          dest = "sslPort",
-                          help = "ip address where the remote web server is hosted at")
+                          action="store",
+                          type=str,
+                          dest="sslPort",
+                          help="ip address where the remote web server is hosted at")
 
         self.add_argument("--pidfile",
-                          action = "store",
-                          type = "string",
-                          dest = "pidFile",
+                          action="store",
+                          type=str,
+                          dest="pidFile",
                           default="",
-                          help = "name of the pidfile to generate")
+                          help="name of the pidfile to generate")
 
         self.add_argument("--gecko-path",
                           action="store",
@@ -390,15 +394,15 @@ class B2GArgumentParser(ReftestArgumentsParser):
 
         self.add_argument('--busybox',
                           action='store',
-                          type='string',
+                          type=str,
                           dest='busybox',
                           help="Path to busybox binary to install on device")
 
         self.add_argument("--httpd-path",
-                          action = "store",
-                          type = "string",
-                          dest = "httpdPath",
-                          help = "path to the httpd.js file")
+                          action="store",
+                          type=str,
+                          dest="httpdPath",
+                          help="path to the httpd.js file")
 
         self.add_argument("--profile",
                           action="store",
@@ -425,19 +429,23 @@ class B2GArgumentParser(ReftestArgumentsParser):
                           default=False,
                           help="Run the tests out of process")
 
-        self.set_defaults({"remoteTestRoot": None,
-                           "logFile": "reftest.log",
-                           "autorun": True,
-                           "closeWhenDone": True,
-                           "testPath": ""})
+        self.set_defaults(app=Automation.DEFAULT_APP,
+                          remoteTestRoot=None,
+                          logFile="reftest.log",
+                          autorun=True,
+                          closeWhenDone=True,
+                          testPath="")
 
     def validate_remote(self, options, automation):
+        import moznetwork
+
         if not options.remoteTestRoot:
-            options.remoteTestRoot = self.automation._devicemanager.deviceRoot + "/reftest"
+            options.remoteTestRoot = automation._devicemanager.deviceRoot + \
+                "/reftest"
 
         options.remoteProfile = options.remoteTestRoot + "/profile"
 
-        productRoot = options.remoteTestRoot + "/" + self.automation._product
+        productRoot = options.remoteTestRoot + "/" + automation._product
         if options.utilityPath is None:
             options.utilityPath = productRoot + "/bin"
 
@@ -451,12 +459,14 @@ class B2GArgumentParser(ReftestArgumentsParser):
             if os.name != "nt":
                 options.remoteWebServer = moznetwork.get_ip()
             else:
-                self.error("ERROR: you must specify a --remote-webserver=<ip address>\n")
+                self.error(
+                    "ERROR: you must specify a --remote-webserver=<ip address>\n")
 
         options.webServer = options.remoteWebServer
 
         if options.geckoPath and not options.emulator:
-            self.error("You must specify --emulator if you specify --gecko-path")
+            self.error(
+                "You must specify --emulator if you specify --gecko-path")
 
         if options.logdir and not options.emulator:
             self.error("You must specify --emulator if you specify --logdir")
@@ -465,11 +475,13 @@ class B2GArgumentParser(ReftestArgumentsParser):
             options.remoteLogFile = "reftest.log"
 
         options.localLogName = options.remoteLogFile
-        options.remoteLogFile = options.remoteTestRoot + '/' + options.remoteLogFile
+        options.remoteLogFile = options.remoteTestRoot + \
+            '/' + options.remoteLogFile
 
         # Ensure that the options.logfile (which the base class uses) is set to
         # the remote setting when running remote. Also, if the user set the
-        # log file name there, use that instead of reusing the remotelogfile as above.
+        # log file name there, use that instead of reusing the remotelogfile as
+        # above.
         if (options.logFile):
             # If the user specified a local logfile name use that
             options.localLogName = options.logFile
@@ -487,123 +499,127 @@ class B2GArgumentParser(ReftestArgumentsParser):
 
         # httpd-path is specified by standard makefile targets and may be specified
         # on the command line to select a particular version of httpd.js. If not
-        # specified, try to select the one from from the xre bundle, as required in bug 882932.
+        # specified, try to select the one from from the xre bundle, as
+        # required in bug 882932.
         if not options.httpdPath:
             options.httpdPath = os.path.join(options.xrePath, "components")
 
         return options
 
+
 class RemoteArgumentsParser(ReftestArgumentsParser):
     def __init__(self, **kwargs):
         import moznetwork
+        
         super(RemoteArgumentsParser, self).__init__()
 
         # app, xrePath and utilityPath variables are set in main function
-        self.set_defaults({"logFile": "reftest.log",
-                           "app": "",
-                           "xrePath": "",
-                           "utilityPath": "",
-                           "localLogName": None})
+        self.set_defaults(logFile="reftest.log",
+                          app="",
+                          xrePath="",
+                          utilityPath="",
+                          localLogName=None)
 
         self.add_argument("--remote-app-path",
-                        action="store",
-                        type=str,
-                        dest="remoteAppPath",
-                        help = "Path to remote executable relative to device root using only forward slashes.  Either this or app must be specified, but not both.")
+                          action="store",
+                          type=str,
+                          dest="remoteAppPath",
+                          help="Path to remote executable relative to device root using only forward slashes.  Either this or app must be specified, but not both.")
 
         self.add_argument("--deviceIP",
                           action="store",
-                          type = "string",
-                          dest = "deviceIP",
-                          help = "ip address of remote device to test")
+                          type=str,
+                          dest="deviceIP",
+                          help="ip address of remote device to test")
 
         self.add_argument("--deviceSerial",
                           action="store",
-                          type = "string",
-                          dest = "deviceSerial",
-                          help = "adb serial number of remote device to test")
+                          type=str,
+                          dest="deviceSerial",
+                          help="adb serial number of remote device to test")
 
         self.add_argument("--devicePort",
                           action="store",
-                          type = "string",
+                          type=str,
                           default="20701",
-                          dest = "devicePort",
-                          help = "port of remote device to test")
+                          dest="devicePort",
+                          help="port of remote device to test")
 
         self.add_argument("--remote-product-name",
                           action="store",
-                          type = "string",
-                          dest = "remoteProductName",
+                          type=str,
+                          dest="remoteProductName",
                           default="fennec",
-                          help = "Name of product to test - either fennec or firefox, defaults to fennec")
+                          help="Name of product to test - either fennec or firefox, defaults to fennec")
 
         self.add_argument("--remote-webserver",
                           action="store",
-                          type = "string",
-                          dest = "remoteWebServer",
+                          type=str,
+                          dest="remoteWebServer",
                           default=moznetwork.get_ip(),
-                          help = "IP Address of the webserver hosting the reftest content")
+                          help="IP Address of the webserver hosting the reftest content")
 
         self.add_argument("--http-port",
-                          action = "store",
-                          type = "string",
-                          dest = "httpPort",
-                          help = "port of the web server for http traffic")
+                          action="store",
+                          type=str,
+                          dest="httpPort",
+                          help="port of the web server for http traffic")
 
         self.add_argument("--ssl-port",
-                          action = "store",
-                          type = "string",
-                          dest = "sslPort",
-                          help = "Port for https traffic to the web server")
+                          action="store",
+                          type=str,
+                          dest="sslPort",
+                          help="Port for https traffic to the web server")
 
         self.add_argument("--remote-logfile",
                           action="store",
-                          type = "string",
-                          dest = "remoteLogFile",
+                          type=str,
+                          dest="remoteLogFile",
                           default="reftest.log",
-                          help = "Name of log file on the device relative to device root.  PLEASE USE ONLY A FILENAME.")
+                          help="Name of log file on the device relative to device root.  PLEASE USE ONLY A FILENAME.")
 
         self.add_argument("--pidfile",
-                          action = "store",
-                          type = "string",
-                          dest = "pidFile",
+                          action="store",
+                          type=str,
+                          dest="pidFile",
                           default="",
-                          help = "name of the pidfile to generate")
+                          help="name of the pidfile to generate")
 
         self.add_argument("--bootstrap",
                           action="store_true",
-                          dest = "bootstrap",
+                          dest="bootstrap",
                           default=False,
-                          help = "test with a bootstrap addon required for native Fennec")
+                          help="test with a bootstrap addon required for native Fennec")
 
         self.add_argument("--dm_trans",
                           action="store",
-                          type = "string",
-                          dest = "dm_trans",
+                          type=str,
+                          dest="dm_trans",
                           default="sut",
-                          help = "the transport to use to communicate with device: [adb|sut]; default=sut")
+                          help="the transport to use to communicate with device: [adb|sut]; default=sut")
 
         self.add_argument("--remoteTestRoot",
-                          action = "store",
-                          type = "string",
-                          dest = "remoteTestRoot",
-                          help = "remote directory to use as test root (eg. /mnt/sdcard/tests or /data/local/tests)")
+                          action="store",
+                          type=str,
+                          dest="remoteTestRoot",
+                          help="remote directory to use as test root (eg. /mnt/sdcard/tests or /data/local/tests)")
 
         self.add_argument("--httpd-path",
-                          action = "store",
-                          type = "string",
-                          dest = "httpdPath",
-                          help = "path to the httpd.js file")
+                          action="store",
+                          type=str,
+                          dest="httpdPath",
+                          help="path to the httpd.js file")
 
     def validate_remote(self, options, automation):
         # Ensure our defaults are set properly for everything we can infer
         if not options.remoteTestRoot:
-            options.remoteTestRoot = automation._devicemanager.deviceRoot + '/reftest'
+            options.remoteTestRoot = automation._devicemanager.deviceRoot + \
+                '/reftest'
         options.remoteProfile = options.remoteTestRoot + "/profile"
 
         # Verify that our remotewebserver is set properly
         if (options.remoteWebServer is None or
-            options.remoteWebServer == '127.0.0.1'):
+                options.remoteWebServer == '127.0.0.1'):
             self.error("ERROR: Either you specified the loopback for the remote webserver or ",
                        "your local IP cannot be detected.  Please provide the local ip in --remote-webserver")
 
@@ -615,9 +631,11 @@ class RemoteArgumentsParser(ReftestArgumentsParser):
 
         # One of remoteAppPath (relative path to application) or the app (executable) must be
         # set, but not both.  If both are set, we destroy the user's selection for app
-        # so instead of silently destroying a user specificied setting, we error.
+        # so instead of silently destroying a user specificied setting, we
+        # error.
         if options.remoteAppPath and options.app:
-            self.error("ERROR: You cannot specify both the remoteAppPath and the app")
+            self.error(
+                "ERROR: You cannot specify both the remoteAppPath and the app")
         elif options.remoteAppPath:
             options.app = options.remoteTestRoot + "/" + options.remoteAppPath
         elif options.app is None:
@@ -625,17 +643,20 @@ class RemoteArgumentsParser(ReftestArgumentsParser):
             self.error("ERROR: You must specify either appPath or app")
 
         if options.xrePath is None:
-            self.error("ERROR: You must specify the path to the controller xre directory")
+            self.error(
+                "ERROR: You must specify the path to the controller xre directory")
         else:
             # Ensure xrepath is a full path
             options.xrePath = os.path.abspath(options.xrePath)
 
         options.localLogName = options.remoteLogFile
-        options.remoteLogFile = options.remoteTestRoot + '/' + options.remoteLogFile
+        options.remoteLogFile = options.remoteTestRoot + \
+            '/' + options.remoteLogFile
 
         # Ensure that the options.logfile (which the base class uses) is set to
         # the remote setting when running remote. Also, if the user set the
-        # log file name there, use that instead of reusing the remotelogfile as above.
+        # log file name there, use that instead of reusing the remotelogfile as
+        # above.
         if options.logFile:
             # If the user specified a local logfile name use that
             options.localLogName = options.logFile
@@ -649,13 +670,16 @@ class RemoteArgumentsParser(ReftestArgumentsParser):
 
         # httpd-path is specified by standard makefile targets and may be specified
         # on the command line to select a particular version of httpd.js. If not
-        # specified, try to select the one from hostutils.zip, as required in bug 882932.
+        # specified, try to select the one from hostutils.zip, as required in
+        # bug 882932.
         if not options.httpdPath:
             options.httpdPath = os.path.join(options.utilityPath, "components")
 
         if not options.ignoreWindowSize:
-            parts = automation._devicemanager.getInfo('screen')['screen'][0].split()
+            parts = automation._devicemanager.getInfo(
+                'screen')['screen'][0].split()
             width = int(parts[0].split(':')[1])
             height = int(parts[1].split(':')[1])
             if (width < 1050 or height < 1050):
-                self.error("ERROR: Invalid screen resolution %sx%s, please adjust to 1366x1050 or higher" % (width, height))
+                self.error("ERROR: Invalid screen resolution %sx%s, please adjust to 1366x1050 or higher" % (
+                    width, height))
