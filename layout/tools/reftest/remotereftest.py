@@ -9,9 +9,9 @@ import tempfile
 import traceback
 
 # We need to know our current directory so that we can serve our test files from it.
-SCRIPT_DIRECTORY = os.path.abspath(os.path.realpath(os.path.dirname(sys.argv[0])))
+SCRIPT_DIRECTORY = os.path.abspath(os.path.realpath(os.path.dirname(__file__)))
 
-from runreftest import RefTest
+from runreftest import RefTest, ReftestResolver
 from automation import Automation
 import devicemanager
 import droid
@@ -20,6 +20,29 @@ import moznetwork
 from remoteautomation import RemoteAutomation, fennecLogcatFilters
 
 import reftestcommandline
+
+class RemoteReftestResolver(ReftestResolver):
+    def absManifestPath(self, path):
+        print "SCRIPT_DIRECTORY", SCRIPT_DIRECTORY
+        print "path", path
+        return os.path.join(SCRIPT_DIRECTORY, path)
+
+    def manifestURL(self, options, path):
+        # Dynamically build the reftest URL if possible, beware that args[0] should exist 'inside' the webroot
+        relPath = os.path.relpath(path, SCRIPT_DIRECTORY)
+        print "path", path
+        print "relPath", relPath
+        assert ".." not in relPath
+        return "http://%s:%s/%s" % (options.remoteWebServer, options.httpPort, relPath)
+
+    def findPath(self, paths, filename = None):
+        for path in paths:
+            p = path
+            if filename:
+                p = os.path.join(p, filename)
+            if os.path.exists(self.getFullPath(p)):
+                return path
+        return None
 
 class ReftestServer:
     """ Web server used to serve Reftests, for closer fidelity to the real web.
@@ -107,6 +130,7 @@ class ReftestServer:
 
 class RemoteReftest(RefTest):
     remoteApp = ''
+    resolver_cls = RemoteReftestResolver
 
     def __init__(self, automation, devicemanager, options, scriptDir):
         RefTest.__init__(self)
@@ -125,25 +149,6 @@ class RemoteReftest(RefTest):
             self.SERVER_STARTUP_TIMEOUT = 90
         self.automation.deleteANRs()
         self.automation.deleteTombstones()
-
-    def absManifestPath(self, path):
-        print SCRIPT_DIRECTORY
-        return os.path.join(SCRIPT_DIRECTORY, path)
-
-    def manifestURL(self, options, path):
-        # Dynamically build the reftest URL if possible, beware that args[0] should exist 'inside' the webroot
-        relPath = os.path.relpath(path, SCRIPT_DIRECTORY)
-        assert ".." not in relPath
-        return "http://%s:%s/%s" % (options.remoteWebServer, options.httpPort, relPath)
-
-    def findPath(self, paths, filename = None):
-        for path in paths:
-            p = path
-            if filename:
-                p = os.path.join(p, filename)
-            if os.path.exists(self.getFullPath(p)):
-                return path
-        return None
 
     def startWebServer(self, options):
         """ Create the webserver on the host and start it up """

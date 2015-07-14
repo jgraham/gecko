@@ -17,8 +17,8 @@ print here
 from automation import Automation
 from b2gautomation import B2GRemoteAutomation
 from b2g_desktop import run_desktop_reftests
+from remotereftest import RemoteReftestResolver, ReftestServer
 from runreftest import RefTest
-from remotereftest import ReftestServer
 import reftestcommandline
 
 from mozdevice import DeviceManagerADB, DMError
@@ -55,6 +55,7 @@ class B2GRemoteReftest(RefTest):
     localProfile = None
     remoteApp = ''
     profile = None
+    resolver_cls = RemoteReftestResolver
 
     def __init__(self, automation, devicemanager, options, scriptDir):
         RefTest.__init__(self)
@@ -418,6 +419,14 @@ def run_remote_reftests(parser, options):
 
     reftest.stopWebServer(options)
     return retVal
+
+def run_remote(**kwargs):
+    # Tests need to be served from a subdirectory of the server. Symlink
+    # topsrcdir here to get around this.
+    parser = reftestcommandline.B2GArgumentParser()
+    parser.set_defaults(**kwargs)
+    options = parser.parse_args(kwargs["tests"])
+    return run_remote_reftests(parser, options)
 
 def main():
     parser = reftestcommandline.B2GArgumentParser()

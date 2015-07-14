@@ -128,32 +128,7 @@ class ReftestThread(threading.Thread):
             if summaryHeadRegex.search(line) is None:
                 yield line
 
-
-class RefTest(object):
-    oldcwd = os.getcwd()
-
-    def __init__(self):
-        self.update_mozinfo()
-        self.lastTestSeen = 'reftest'
-        self.haveDumpedScreen = False
-
-    def update_mozinfo(self):
-        """walk up directories to find mozinfo.json update the info"""
-        # TODO: This should go in a more generic place, e.g. mozinfo
-
-        path = SCRIPT_DIRECTORY
-        dirs = set()
-        while path != os.path.expanduser('~'):
-            if path in dirs:
-                break
-            dirs.add(path)
-            path = os.path.split(path)[0]
-        mozinfo.find_and_update_from_json(*dirs)
-
-    def getFullPath(self, path):
-        "Get an absolute path relative to self.oldcwd."
-        return os.path.normpath(os.path.join(self.oldcwd, os.path.expanduser(path)))
-
+class ReftestResolver(object):
     def defaultManifest(self, suite):
         return {"reftest": "reftest.list",
                 "reftest-ipc": "reftest.list",
@@ -198,11 +173,34 @@ class RefTest(object):
         for key in manifests.iterkeys():
             manifests[key] = sorted(list(manifests[key]))
 
-
         return manifests
 
-    def makeJSString(self, s):
-        return '"%s"' % re.sub(r'([\\"])', r'\\\1', s)
+class RefTest(object):
+    oldcwd = os.getcwd()
+    resolver_cls = ReftestResolver
+
+    def __init__(self):
+        self.update_mozinfo()
+        self.lastTestSeen = 'reftest'
+        self.haveDumpedScreen = False
+        self.resolver = self.resolver_cls()
+
+    def update_mozinfo(self):
+        """walk up directories to find mozinfo.json update the info"""
+        # TODO: This should go in a more generic place, e.g. mozinfo
+
+        path = SCRIPT_DIRECTORY
+        dirs = set()
+        while path != os.path.expanduser('~'):
+            if path in dirs:
+                break
+            dirs.add(path)
+            path = os.path.split(path)[0]
+        mozinfo.find_and_update_from_json(*dirs)
+
+    def getFullPath(self, path):
+        "Get an absolute path relative to self.oldcwd."
+        return os.path.normpath(os.path.join(self.oldcwd, os.path.expanduser(path)))
 
     def createReftestProfile(self, options, manifests, server='localhost', port=0,
                              profile_to_clone=None):
@@ -295,8 +293,6 @@ class RefTest(object):
         for f in options.extensionsToInstall:
             addons.append(self.getFullPath(f))
 
-        print addons
-
         kwargs = {'addons': addons,
                   'preferences': prefs,
                   'locations': locations}
@@ -371,7 +367,7 @@ class RefTest(object):
         self.killNamedOrphans('ssltunnel')
         self.killNamedOrphans('xpcshell')
 
-        manifests = self.resolveManifests(options, tests)
+        manifests = self.resolver.resolveManifests(options, tests)
         if options.filter:
             manifests[""] = options.filter
 
@@ -732,7 +728,6 @@ def run(**kwargs):
     parser.set_defaults(**kwargs)
     options = parser.parse_args(kwargs["tests"])
     parser.validate(options, reftest)
-    print options
     return reftest.runTests(options.tests, options)
 
 

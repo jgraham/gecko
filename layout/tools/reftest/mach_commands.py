@@ -85,8 +85,7 @@ class ReftestRunner(MozbuildObject):
     def _make_shell_string(self, s):
         return "'%s'" % re.sub("'", r"'\''", s)
 
-    def run_b2g_test(self, b2g_home=None, xre_path=None, test_file=None,
-                     suite=None, filter=None, **kwargs):
+    def run_b2g_test(self, b2g_home=None, xre_path=None, **kwargs):
         """Runs a b2g reftest.
 
         filter is a regular expression (in JS syntax, as could be passed to the
@@ -99,98 +98,90 @@ class ReftestRunner(MozbuildObject):
         suite is the type of reftest to run. It can be one of ('reftest',
         'crashtest').
         """
-        if suite not in ('reftest', 'crashtest'):
+        if kwargs["suite"] not in ('reftest', 'crashtest'):
             raise Exception('None or unrecognized reftest suite type.')
 
+        sys.path.insert(0, self.reftest_dir)
+
+        test_subdir = {"reftest": os.path.join('layout', 'reftests'),
+                       "crashtest": os.path.join('layout', 'crashtest')}[kwargs["suite"]]
+
         # Find the manifest file
-        if not test_file:
-            if suite == 'reftest':
-                test_file = mozpath.join('layout', 'reftests')
-            elif suite == 'crashtest':
-                test_file = mozpath.join('testing', 'crashtest')
+        if not kwargs["tests"]:
+            if not os.path.exists(os.path.join(self.topsrcdir, test_subdir)):
+                test_file = mozpath.relpath(os.path.abspath(test_subdir),
+                                            self.topsrcdir)
+            kwargs["tests"] = [test_subdir]
 
-        if not os.path.exists(os.path.join(self.topsrcdir, test_file)):
-            test_file = mozpath.relpath(os.path.abspath(test_file),
-                                             self.topsrcdir)
-
-        # Need to chdir to reftest_dir otherwise imports fail below.
-        os.chdir(self.reftest_dir)
-
-        # The imp module can spew warnings if the modules below have
-        # already been imported, ignore them.
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-
-            import imp
-            path = os.path.join(self.reftest_dir, 'runreftestb2g.py')
-            with open(path, 'r') as fh:
-                imp.load_module('reftest', fh, path, ('.py', 'r', imp.PY_SOURCE))
-            import reftest
-
-        # Set up the reftest options.
-        parser = reftestcommandline.B2GArgumentParser()
-        options = parser.parse_args([])
-
-        #TODO Hmmm
-        options.suite = suite
-
-        # Tests need to be served from a subdirectory of the server. Symlink
-        # topsrcdir here to get around this.
         tests = os.path.join(self.reftest_dir, 'tests')
         if not os.path.isdir(tests):
             os.symlink(self.topsrcdir, tests)
-#        args.insert(0, os.path.join('tests', manifest))
 
-        for k, v in kwargs.iteritems():
-            setattr(options, k, v)
+        for i, path in enumerate(kwargs["tests"]):
+            # Non-absolute paths are relative to the packaged directory, which
+            # has an extra tests/ at the start
+            if os.path.exists(os.path.abspath(path)):
+                path = os.path.relpath(path, os.path.join(self.topsrcdir))
+            kwargs["tests"][i] = os.path.join('tests', path)
+
+        print kwargs["tests"]
 
         if conditions.is_b2g_desktop(self):
-            if self.substs.get('ENABLE_MARIONETTE') != '1':
-                print(MARIONETTE_DISABLED % ('mochitest-b2g-desktop',
-                                             self.mozconfig['path']))
-                return 1
+            return self.run_b2g_desktop(**kwargs)
 
-            options.profile = options.profile or os.environ.get('GAIA_PROFILE')
-            if not options.profile:
+        return self.run_b2g_remote(b2g_home, xre_path, **kwargs)
+
+    def run_b2g_desktop(self, **kwargs):
+        if self.substs.get('ENABLE_MARIONETTE') != '1':
+            print(MARIONETTE_DISABLED % ('mochitest-b2g-desktop',
+                                         self.mozconfig['path']))
+            return 1
+
+        if not kwargs["profile"]:
+            gaia_profile = os.environ.get('GAIA_PROFILE')
+            if not gaia_profile:
                 print(GAIA_PROFILE_NOT_FOUND % 'reftest-b2g-desktop')
                 return 1
+            kwargs["profile"] = gaia_profile
 
-            if os.path.isfile(os.path.join(options.profile, 'extensions', \
-                    'httpd@gaiamobile.org')):
-                print(GAIA_PROFILE_IS_DEBUG % ('mochitest-b2g-desktop',
-                                               options.profile))
-                return 1
 
-            options.desktop = True
-            options.app = self.get_binary_path()
-            if options.oop:
-                options.browser_arg = '-oop'
-            if not options.app.endswith('-bin'):
-                options.app = '%s-bin' % options.app
-            if not os.path.isfile(options.app):
-                options.app = options.app[:-len('-bin')]
+        if os.path.isfile(os.path.join(kwargs["profile"], 'extensions',
+                                       'httpd@gaiamobile.org')):
+            print(GAIA_PROFILE_IS_DEBUG % ('mochitest-b2g-desktop',
+                                           kwargs["profile"]))
+            return 1
 
-            return reftest.run_desktop_reftests(parser, options)
+        kwargs["desktop"] = True
+        kwargs["app"] = self.get_binary_path()
+        if kwargs["oop"]:
+            options.browser_arg = '-oop'
+        if not kwargs["app"].endswith('-bin'):
+            kwargs["app"] = '%s-bin' % options.app
+        if not os.path.isfile(kwargs["app"]):
+            options.app = kwargs["app"][:-len('-bin')]
 
+        return runreftestb2g.run(**kwargs)
+
+    def run_b2g_remote(self, b2g_home, xre_path, **kwargs):
+        import runreftestb2g
 
         try:
             which.which('adb')
         except which.WhichError:
             # TODO Find adb automatically if it isn't on the path
-            raise Exception(ADB_NOT_FOUND % ('%s-remote' % suite, b2g_home))
+            raise Exception(ADB_NOT_FOUND % ('%s-remote' % kwargs["suite"], b2g_home))
 
-        options.b2gPath = b2g_home
-        options.logdir = self.reftest_dir
-        options.httpdPath = os.path.join(self.topsrcdir, 'netwerk', 'test', 'httpserver')
-        options.xrePath = xre_path
-        options.ignoreWindowSize = True
-        options.filter = filter
+        kwargs["b2gPath"] = b2g_home
+        kwargs["logdir"] = self.reftest_dir
+        kwargs["httpdPath"] = os.path.join(self.topsrcdir, 'netwerk', 'test', 'httpserver')
+        kwargs["xrePath"] = xre_path
+        kwargs["ignoreWindowSize"] = True
 
         # Don't enable oop for crashtest until they run oop in automation
-        if suite == 'reftest':
-            options.oop = True
+        if kwargs["suite"] == 'reftest':
+            kwargs["oop"] = True
 
-        return reftest.run_remote_reftests(parser, options)
+        return runreftestb2g.run_remote(**kwargs)
 
     def run_desktop_test(self, **kwargs):
         """Runs a reftest."""
@@ -230,58 +221,6 @@ class ReftestRunner(MozbuildObject):
         self.log_manager.disable_unstructured()
 
         return rv
-
-def B2GCommand(func):
-    """Decorator that adds shared command arguments to b2g reftest commands."""
-
-    busybox = CommandArgument('--busybox', default=None,
-        help='Path to busybox binary to install on device')
-    func = busybox(func)
-
-    logdir = CommandArgument('--logdir', default=None,
-        help='directory to store log files')
-    func = logdir(func)
-
-    sdcard = CommandArgument('--sdcard', default="10MB",
-        help='Define size of sdcard: 1MB, 50MB...etc')
-    func = sdcard(func)
-
-    emulator_res = CommandArgument('--emulator-res', default='800x1000',
-        help='Emulator resolution of the format \'<width>x<height>\'')
-    func = emulator_res(func)
-
-    marionette = CommandArgument('--marionette', default=None,
-        help='host:port to use when connecting to Marionette')
-    func = marionette(func)
-
-    totalChunks = CommandArgument('--total-chunks', dest='totalChunks',
-        type = int,
-        help = 'How many chunks to split the tests up into.')
-    func = totalChunks(func)
-
-    thisChunk = CommandArgument('--this-chunk', dest='thisChunk',
-        type = int,
-        help = 'Which chunk to run between 1 and --total-chunks.')
-    func = thisChunk(func)
-
-    flter = CommandArgument('--filter', metavar='REGEX',
-        help='A JS regular expression to match test URLs against, to select '
-             'a subset of tests to run.')
-    func = flter(func)
-
-    oop = CommandArgument('--enable-oop', action='store_true', dest='oop',
-        help = 'Run tests in out-of-process mode.')
-    func = oop(func)
-
-    path = CommandArgument('test_file', default=None, nargs='?',
-        metavar='TEST',
-        help='Test to run. Can be specified as a single file, a ' \
-            'directory, or omitted. If omitted, the entire test suite is ' \
-            'executed.')
-    func = path(func)
-
-    return func
-
 
 @CommandProvider
 class MachCommands(MachCommandBase):
@@ -360,27 +299,27 @@ class B2GCommands(MachCommandBase):
             setattr(self, attr, getattr(context, attr, None))
 
     @Command('reftest-remote', category='testing',
-        description='Run a remote reftest (b2g layout and graphics correctness, remote device).',
-        conditions=[conditions.is_b2g, is_emulator])
-    @B2GCommand
-    def run_reftest_remote(self, test_file, **kwargs):
-        return self._run_reftest(test_file, suite='reftest', **kwargs)
+             description='Run a remote reftest (b2g layout and graphics correctness, remote device).',
+             conditions=[conditions.is_b2g, is_emulator],
+             parser=reftestcommandline.B2GArgumentParser)
+    def run_reftest_remote(self, **kwargs):
+        return self._run_reftest(suite='reftest', **kwargs)
 
     @Command('reftest-b2g-desktop', category='testing',
-        description='Run a b2g desktop reftest (b2g desktop layout and graphics correctness).',
-        conditions=[conditions.is_b2g_desktop])
-    @B2GCommand
-    def run_reftest_b2g_desktop(self, test_file, **kwargs):
-        return self._run_reftest(test_file, suite='reftest', **kwargs)
+             description='Run a b2g desktop reftest (b2g desktop layout and graphics correctness).',
+             conditions=[conditions.is_b2g_desktop],
+             parser=reftestcommandline.B2GArgumentParser)
+    def run_reftest_b2g_desktop(self, **kwargs):
+        return self._run_reftest(suite='reftest', **kwargs)
 
     @Command('crashtest-remote', category='testing',
-        description='Run a remote crashtest (Check if b2g crashes on a page, remote device).',
-        conditions=[conditions.is_b2g, is_emulator])
-    @B2GCommand
+             description='Run a remote crashtest (Check if b2g crashes on a page, remote device).',
+             conditions=[conditions.is_b2g, is_emulator],
+             parser=reftestcommandline.B2GArgumentParser)
     def run_crashtest_remote(self, test_file, **kwargs):
-        return self._run_reftest(test_file, suite='crashtest', **kwargs)
+        return self._run_reftest(suite='crashtest', **kwargs)
 
-    def _run_reftest(self, test_file=None, suite=None, **kwargs):
+    def _run_reftest(self, **kwargs):
         if self.device_name:
             if self.device_name.startswith('emulator'):
                 emulator = 'arm'
@@ -389,5 +328,4 @@ class B2GCommands(MachCommandBase):
                 kwargs['emulator'] = emulator
 
         reftest = self._spawn(ReftestRunner)
-        return reftest.run_b2g_test(self.b2g_home, self.xre_path,
-            test_file, suite=suite, **kwargs)
+        return reftest.run_b2g_test(self.b2g_home, self.xre_path, **kwargs)

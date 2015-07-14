@@ -290,8 +290,6 @@ class B2GArgumentParser(ReftestArgumentsParser):
     def __init__(self, **kwargs):
         super(B2GArgumentParser, self).__init__(**kwargs)
 
-        from automation import Automation
-
         self.add_argument("--browser-arg",
                           action="store",
                           type=str,
@@ -429,8 +427,7 @@ class B2GArgumentParser(ReftestArgumentsParser):
                           default=False,
                           help="Run the tests out of process")
 
-        self.set_defaults(app=Automation.DEFAULT_APP,
-                          remoteTestRoot=None,
+        self.set_defaults(remoteTestRoot=None,
                           logFile="reftest.log",
                           autorun=True,
                           closeWhenDone=True,
@@ -438,6 +435,9 @@ class B2GArgumentParser(ReftestArgumentsParser):
 
     def validate_remote(self, options, automation):
         import moznetwork
+
+        if not options.app:
+            options.app = automation.DEFAULT_APP
 
         if not options.remoteTestRoot:
             options.remoteTestRoot = automation._devicemanager.deviceRoot + \
@@ -510,7 +510,7 @@ class B2GArgumentParser(ReftestArgumentsParser):
 class RemoteArgumentsParser(ReftestArgumentsParser):
     def __init__(self, **kwargs):
         import moznetwork
-        
+
         super(RemoteArgumentsParser, self).__init__()
 
         # app, xrePath and utilityPath variables are set in main function
