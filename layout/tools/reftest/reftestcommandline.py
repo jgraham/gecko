@@ -181,7 +181,7 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
                           help="Path to the special powers extension")
 
         self.add_argument("--suite",
-                          choices=["reftest", "reftest-ipc", "crashtest", "crashtest-ipc", "jstestbrowser"],
+                          choices=["reftest", "crashtest", "jstestbrowser"],
                           default=None,
                           help=argparse.SUPPRESS)
 
@@ -210,6 +210,8 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
         self.error("Failed to determine test suite; supply --suite to set this explicitly")
 
     def validate(self, options, reftest):
+        import sys
+
         if not options.tests:
             # Can't just set this in the argument parser because mach will set a default
             self.error("Must supply at least one path to a manifest file or test to run.")
@@ -244,7 +246,7 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
                 options.reftestExtensionPath = os.path.join(here, "reftest")
 
         if (options.specialPowersExtensionPath is None and
-            options.suite in ["crashtests", "crashtests-ipc", "jstestbrowser"]):
+            options.suite in ["crashtests", "jstestbrowser"]):
             if self.build_obj is not None:
                 options.specialPowersExtensionPath = os.path.join(self.build_obj.topobjdir, "_tests",
                                                                   "reftest", "specialpowers")
@@ -274,8 +276,32 @@ class DesktopArgumentsParser(ReftestArgumentsParser):
                           dest="runTestsInParallel",
                           help="run tests in parallel if possible")
 
+        self.add_argument("--ipc",
+                          action="store_true",
+                          default=False,
+                          help="Run in out-of-processes mode")
+
+    def _prefs_oop(self):
+        import mozinfo
+        prefs = ["layers.async-pan-zoom.enabled=true",
+                 "browser.tabs.remote.autostart=true"]
+        if mozinfo.os == "win":
+            prefs.append("layers.acceleration.disabled=true")
+
+        return prefs
+
+    def _prefs_gpu(self):
+        if mozinfo.os != "win":
+            return ["layers.acceleration.force-enabled=true"]
+        return []
+
     def validate(self, options, reftest):
         super(DesktopArgumentsParser, self).validate(options, reftest)
+
+        if options.ipc:
+            for item in self._prefs_oop():
+                if item not in options.extraPrefs:
+                    options.extraPrefs.append(item)
 
         if options.runTestsInParallel:
             if options.logFile is not None:

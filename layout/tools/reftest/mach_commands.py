@@ -11,7 +11,6 @@ import sys
 import warnings
 import which
 
-import mozinfo
 from mozbuild.base import (
     MachCommandBase,
     MachCommandConditions as conditions,
@@ -187,15 +186,12 @@ class ReftestRunner(MozbuildObject):
         """Runs a reftest."""
         import runreftest
 
-        if kwargs["suite"] not in ('reftest', 'reftest-ipc', 'crashtest', 'crashtest-ipc',
-                                   'jstestbrowser'):
+        if kwargs["suite"] not in ('reftest', 'crashtest', 'jstestbrowser'):
             raise Exception('None or unrecognized reftest suite type.')
 
         default_manifest = {
             "reftest": (self.topsrcdir, "layout", "reftests", "reftest.list"),
-            "reftest-ipc": (self.topsrcdir, "layout", "reftests", "reftest.list"),
             "crashtest": (self.topsrcdir, "testing", "crashtest", "crashtest.list"),
-            "crashtest-ipc": (self.topsrcdir, "testing", "crashtest", "crashtest.list"),
             "jstestbrowser": (self.topobjdir, "dist", "test-stage", "jsreftest", "tests",
                               "jstests.list")
         }
@@ -248,8 +244,8 @@ class MachCommands(MachCommandBase):
              description='Run IPC reftests (layout and graphics correctness, separate process).',
              parser=reftestcommandline.DesktopArgumentsParser)
     def run_ipc(self, **kwargs):
-        kwargs["extraPrefs"] += self._prefs_oop()
-        kwargs["suite"] = "reftest-ipc"
+        kwargs["ipc"] = True
+        kwargs["suite"] = "reftest"
         return self._run_reftest(**kwargs)
 
     @Command('crashtest',
@@ -265,22 +261,9 @@ class MachCommands(MachCommandBase):
              description='Run IPC crashtests (Check if crashes on a page, separate process).',
              parser=reftestcommandline.DesktopArgumentsParser)
     def run_crashtest_ipc(self, **kwargs):
-        kwargs["extraPrefs"] += self._prefs_oop()
-        kwargs["suite"] = "crashtest-ipc"
+        kwargs["ipc"] = True
+        kwargs["suite"] = "crashtest"
         return self._run_reftest(**kwargs)
-
-    def _prefs_oop(self):
-        prefs = ["layers.async-pan-zoom.enabled=true",
-                 "browser.tabs.remote.autostart=true"]
-        if mozinfo.os() == "win":
-            prefs.append("layers.acceleration.disabled=true")
-
-        return prefs
-
-    def _prefs_gpu(self):
-        if mozinfo.os() != "win":
-            return ["layers.acceleration.force-enabled=true"]
-        return []
 
     def _run_reftest(self, **kwargs):
         reftest = self._spawn(ReftestRunner)
