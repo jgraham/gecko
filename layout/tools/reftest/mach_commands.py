@@ -229,7 +229,8 @@ class MachCommands(MachCommandBase):
              description='Run reftests (layout and graphics correctness).',
              parser=reftestcommandline.DesktopArgumentsParser)
     def run_reftest(self, **kwargs):
-        return self._run_reftest(suite='reftest', **kwargs)
+        kwargs["suite"] = "reftest"
+        return self._run_reftest(**kwargs)
 
     @Command('jstestbrowser',
              category='testing',
@@ -239,7 +240,8 @@ class MachCommands(MachCommandBase):
         self._mach_context.commands.dispatch("build",
                                              self._mach_context,
                                              what=["stage-jstests"])
-        return self._run_reftest(suite='jstestbrowser', **kwargs)
+        kwargs["suite"] = "jstestbrowser"
+        return self._run_reftest(**kwargs)
 
     @Command('reftest-ipc',
              category='testing',
@@ -247,14 +249,16 @@ class MachCommands(MachCommandBase):
              parser=reftestcommandline.DesktopArgumentsParser)
     def run_ipc(self, **kwargs):
         kwargs["extraPrefs"] += self._prefs_oop()
-        return self._run_reftest(suite='reftest-ipc', **kwargs)
+        kwargs["suite"] = "reftest-ipc"
+        return self._run_reftest(**kwargs)
 
     @Command('crashtest',
              category='testing',
              description='Run crashtests (Check if crashes on a page).',
              parser=reftestcommandline.DesktopArgumentsParser)
     def run_crashtest(self, **kwargs):
-        return self._run_reftest(suite='crashtest', **kwargs)
+        kwargs["suite"] = "crashtest"
+        return self._run_reftest(**kwargs)
 
     @Command('crashtest-ipc',
              category='testing',
@@ -262,8 +266,8 @@ class MachCommands(MachCommandBase):
              parser=reftestcommandline.DesktopArgumentsParser)
     def run_crashtest_ipc(self, **kwargs):
         kwargs["extraPrefs"] += self._prefs_oop()
-        return self._run_reftest(suite='crashtest-ipc', **kwargs)
-
+        kwargs["suite"] = "crashtest-ipc"
+        return self._run_reftest(**kwargs)
 
     def _prefs_oop(self):
         prefs = ["layers.async-pan-zoom.enabled=true",
@@ -278,9 +282,9 @@ class MachCommands(MachCommandBase):
             return ["layers.acceleration.force-enabled=true"]
         return []
 
-    def _run_reftest(self, suite=None, **kwargs):
+    def _run_reftest(self, **kwargs):
         reftest = self._spawn(ReftestRunner)
-        return reftest.run_desktop_test(suite=suite, **kwargs)
+        return reftest.run_desktop_test(**kwargs)
 
 
 # TODO For now b2g commands will only work with the emulator,
@@ -303,21 +307,24 @@ class B2GCommands(MachCommandBase):
              conditions=[conditions.is_b2g, is_emulator],
              parser=reftestcommandline.B2GArgumentParser)
     def run_reftest_remote(self, **kwargs):
-        return self._run_reftest(suite='reftest', **kwargs)
+        kwargs["suite"] = "reftest"
+        return self._run_reftest(**kwargs)
 
     @Command('reftest-b2g-desktop', category='testing',
              description='Run a b2g desktop reftest (b2g desktop layout and graphics correctness).',
              conditions=[conditions.is_b2g_desktop],
              parser=reftestcommandline.B2GArgumentParser)
     def run_reftest_b2g_desktop(self, **kwargs):
-        return self._run_reftest(suite='reftest', **kwargs)
+        kwargs["suite"] = "reftest"
+        return self._run_reftest(**kwargs)
 
     @Command('crashtest-remote', category='testing',
              description='Run a remote crashtest (Check if b2g crashes on a page, remote device).',
              conditions=[conditions.is_b2g, is_emulator],
              parser=reftestcommandline.B2GArgumentParser)
     def run_crashtest_remote(self, test_file, **kwargs):
-        return self._run_reftest(suite='crashtest', **kwargs)
+        kwargs["suite"] = "crashtest"
+        return self._run_reftest(**kwargs)
 
     def _run_reftest(self, **kwargs):
         if self.device_name:

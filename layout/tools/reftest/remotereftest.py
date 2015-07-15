@@ -23,26 +23,14 @@ import reftestcommandline
 
 class RemoteReftestResolver(ReftestResolver):
     def absManifestPath(self, path):
-        print "SCRIPT_DIRECTORY", SCRIPT_DIRECTORY
-        print "path", path
         return os.path.join(SCRIPT_DIRECTORY, path)
 
     def manifestURL(self, options, path):
         # Dynamically build the reftest URL if possible, beware that args[0] should exist 'inside' the webroot
         relPath = os.path.relpath(path, SCRIPT_DIRECTORY)
-        print "path", path
-        print "relPath", relPath
         assert ".." not in relPath
         return "http://%s:%s/%s" % (options.remoteWebServer, options.httpPort, relPath)
 
-    def findPath(self, paths, filename = None):
-        for path in paths:
-            p = path
-            if filename:
-                p = os.path.join(p, filename)
-            if os.path.exists(self.getFullPath(p)):
-                return path
-        return None
 
 class ReftestServer:
     """ Web server used to serve Reftests, for closer fidelity to the real web.
@@ -149,6 +137,15 @@ class RemoteReftest(RefTest):
             self.SERVER_STARTUP_TIMEOUT = 90
         self.automation.deleteANRs()
         self.automation.deleteTombstones()
+
+    def findPath(self, paths, filename = None):
+        for path in paths:
+            p = path
+            if filename:
+                p = os.path.join(p, filename)
+            if os.path.exists(self.getFullPath(p)):
+                return path
+        return None
 
     def startWebServer(self, options):
         """ Create the webserver on the host and start it up """
@@ -365,7 +362,7 @@ def main():
     automation.setRemoteProfile(options.remoteProfile)
     automation.setRemoteLog(options.remoteLogFile)
     reftest = RemoteReftest(automation, dm, options, SCRIPT_DIRECTORY)
-    options = parser.validate(options, reftest)
+    parser.validate(options, reftest)
 
     if mozinfo.info['debug']:
         print "changing timeout for remote debug reftests from %s to 600 seconds" % options.timeout
@@ -403,5 +400,5 @@ def main():
     return retVal
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())
 

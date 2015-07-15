@@ -1,5 +1,6 @@
 import argparse
 import os
+from collections import OrderedDict
 from urlparse import urlparse
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -179,12 +180,43 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
                           dest="specialPowersExtensionPath",
                           help="Path to the special powers extension")
 
+        self.add_argument("--suite",
+                          choices=["reftest", "reftest-ipc", "crashtest", "crashtest-ipc", "jstestbrowser"],
+                          default=None,
+                          help=argparse.SUPPRESS)
+
         self.add_argument("tests",
                           metavar="TEST_PATH",
                           nargs="*",
                           help="Path to test file, manifest file, or directory containing tests")
 
+    def set_default_suite(self, options):
+        manifests = OrderedDict([("reftest.list", "reftest"),
+                                 ("crashtest.list", "crashtests"),
+                                 ("jstests.list", "jstestsbrowser")])
+
+        for test_path in options.tests:
+            file_name = os.path.basename(test_path)
+            if file_name in manifests:
+                options.suite = manifests[file_name]
+                return
+
+        for test_path in options.tests:
+            for manifest_file, suite in manifests.iteritems():
+                if os.path.exists(os.path.join(test_path, manifest_file)):
+                    options.suite = suite
+                    return
+
+        self.error("Failed to determine test suite; supply --suite to set this explicitly")
+
     def validate(self, options, reftest):
+        if not options.tests:
+            # Can't just set this in the argument parser because mach will set a default
+            self.error("Must supply at least one path to a manifest file or test to run.")
+
+        if options.suite is None:
+            self.set_default_suite(options)
+
         if options.totalChunks is not None and options.thisChunk is None:
             self.error(
                 "thisChunk must be specified when totalChunks is specified")
