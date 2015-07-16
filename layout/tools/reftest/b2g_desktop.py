@@ -52,7 +52,7 @@ class B2GDesktopReftest(RefTest):
         self.marionette.execute_script(self.test_script)
 
     def run_tests(self, tests, options):
-        manifests = self.resolveManifests(manifests)
+        manifests = self.resolver.resolveManifests(options, tests)
 
         self.profile = self.create_profile(options, manifests,
                                            profile_to_clone=options.profile)
@@ -134,7 +134,6 @@ class B2GDesktopReftest(RefTest):
         prefs["network.dns.localDomains"] = "app://test-container.gaiamobile.org"
         prefs["reftest.browser.iframe.enabled"] = False
         prefs["reftest.remote"] = False
-        prefs["reftest.uri"] = "%s" % reftestlist
         # Set a future policy version to avoid the telemetry prompt.
         prefs["toolkit.telemetry.prompted"] = 999
         prefs["toolkit.telemetry.notifiedOptOut"] = 999
