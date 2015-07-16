@@ -192,8 +192,8 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
 
     def set_default_suite(self, options):
         manifests = OrderedDict([("reftest.list", "reftest"),
-                                 ("crashtest.list", "crashtests"),
-                                 ("jstests.list", "jstestsbrowser")])
+                                 ("crashtests.list", "crashtest"),
+                                 ("jstests.list", "jstestbrowser")])
 
         for test_path in options.tests:
             file_name = os.path.basename(test_path)
@@ -246,7 +246,7 @@ class ReftestArgumentsParser(argparse.ArgumentParser):
                 options.reftestExtensionPath = os.path.join(here, "reftest")
 
         if (options.specialPowersExtensionPath is None and
-            options.suite in ["crashtests", "jstestbrowser"]):
+            options.suite in ["crashtest", "jstestbrowser"]):
             if self.build_obj is not None:
                 options.specialPowersExtensionPath = os.path.join(self.build_obj.topobjdir, "_tests",
                                                                   "reftest", "specialpowers")

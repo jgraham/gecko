@@ -191,7 +191,7 @@ class ReftestRunner(MozbuildObject):
 
         default_manifest = {
             "reftest": (self.topsrcdir, "layout", "reftests", "reftest.list"),
-            "crashtest": (self.topsrcdir, "testing", "crashtest", "crashtest.list"),
+            "crashtest": (self.topsrcdir, "testing", "crashtest", "crashtests.list"),
             "jstestbrowser": (self.topobjdir, "dist", "test-stage", "jsreftest", "tests",
                               "jstests.list")
         }

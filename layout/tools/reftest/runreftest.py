@@ -131,9 +131,7 @@ class ReftestThread(threading.Thread):
 class ReftestResolver(object):
     def defaultManifest(self, suite):
         return {"reftest": "reftest.list",
-                "reftest-ipc": "reftest.list",
-                "crashtest": "crashtest.list",
-                "crashtest-ipc": "crashtest.list",
+                "crashtest": "crashtests.list",
                 "jstestbrowser": "jstests.list"}[suite]
 
     def findManifest(self, suite, test_file):
@@ -172,7 +170,7 @@ class ReftestResolver(object):
 
         for key in manifests.iterkeys():
             if os.path.split(key)[1] != self.defaultManifest(suite):
-                print >> sys.stderr("Invalid manifest for suite %s, %s" %(options.suite, key))
+                print >> sys.stderr, "Invalid manifest for suite %s, %s" %(options.suite, key)
                 sys.exit(1)
             manifests[key] = sorted(list(manifests[key]))
 
