@@ -23,12 +23,20 @@ import reftestcommandline
 
 class RemoteReftestResolver(ReftestResolver):
     def absManifestPath(self, path):
-        return os.path.join(SCRIPT_DIRECTORY, path)
+        script_abs_path = os.path.join(SCRIPT_DIRECTORY, path)
+        if os.path.exists(script_abs_path):
+            rv = script_abs_path
+        elif os.path.exists(os.path.abspath(path)):
+            rv = os.path.abspath(path)
+        else:
+            print >> sys.stderr, "Could not find manifest %s" % script_abs_path
+            sys.exit(1)
+        return os.path.normpath(rv)
 
     def manifestURL(self, options, path):
         # Dynamically build the reftest URL if possible, beware that args[0] should exist 'inside' the webroot
+        # It's possible for this url to have a leading "..", but reftest.js will fix that up
         relPath = os.path.relpath(path, SCRIPT_DIRECTORY)
-        assert ".." not in relPath
         return "http://%s:%s/%s" % (options.remoteWebServer, options.httpPort, relPath)
 
 
