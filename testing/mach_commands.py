@@ -4,6 +4,7 @@
 
 from __future__ import absolute_import, print_function, unicode_literals
 
+import argparse
 import os
 import sys
 
@@ -413,17 +414,13 @@ class PushToTry(MachCommandBase):
 
     @Command('try', category='testing', description='Push selected tests to the try server')
     @CommandArgument('paths', nargs='*', help='Paths to search for tests to run on try.')
-    @CommandArgument('-n', dest='verbose', action='store_true', default=False,
+    @CommandArgument('-v', dest='verbose', action='store_true', default=False,
                      help='Print detailed information about the resulting test selection '
                           'and commands performed.')
     @CommandArgument('-p', dest='platforms', required='AUTOTRY_PLATFORM_HINT' not in os.environ,
                      help='Platforms to run. (required if not found in the environment)')
-    @CommandArgument('-u', dest='tests',
-                     help='Test jobs to run. These will be used in place of suites '
-                          'determined by test paths, if any.')
-    @CommandArgument('--extra', dest='extra_tests',
-                     help='Additional tests to run. These will be added to suites '
-                          'determined by test paths, if any.')
+    @CommandArgument('-u', dest='tests', nargs="*",
+                     help='Test suites to run in their entirety')
     @CommandArgument('-b', dest='builds', default='do',
                      help='Build types to run (d for debug, o for optimized)')
     @CommandArgument('--tag', dest='tags', action='append',
@@ -432,8 +429,10 @@ class PushToTry(MachCommandBase):
                      help='Do not push to try as a result of running this command (if '
                           'specified this command will only print calculated try '
                           'syntax and selection info).')
+    @CommandArgument('extra_args', nargs=argparse.REMAINDER,
+                     help='Extra arguments to put in the try push')
     def autotry(self, builds=None, platforms=None, paths=None, verbose=None,
-                extra_tests=None, push=None, tags=None, tests=None):
+                push=None, tags=None, tests=None, extra_args=None):
         """Autotry is in beta, please file bugs blocking 1149670.
 
         Pushes the specified tests to try. The simplest way to specify tests is
@@ -461,42 +460,41 @@ class PushToTry(MachCommandBase):
         from mozbuild.testing import TestResolver
         from mozbuild.controller.building import BuildDriver
         from autotry import AutoTry
-        import pprint
 
-        print("mach try is under development, please file bugs blocking 1149670.")
+        if tests is None:
+            tests = []
 
         builds, platforms = self.validate_args(paths, tests, builds, platforms)
         resolver = self._spawn(TestResolver)
 
         at = AutoTry(self.topsrcdir, resolver, self._mach_context)
         if at.find_uncommited_changes():
-            print('ERROR please commit changes before continuing')
-            sys.exit(1)
+            #print('ERROR please commit changes before continuing')
+            #sys.exit(1)
+            pass
 
         driver = self._spawn(BuildDriver)
         driver.install_tests(remove=False)
 
-        manifests_by_flavor = at.manifests_by_flavor(paths)
+        paths = [os.path.relpath(os.path.normpath(os.path.abspath(item)), self.topsrcdir) for item in paths]
+        paths_by_flavor = at.paths_by_flavor(paths)
 
-        if not manifests_by_flavor and not tests:
+        if not paths_by_flavor and not tests:
             print("No tests were found when attempting to resolve paths:\n\n\t%s" %
                   paths)
             sys.exit(1)
 
-        all_manifests = set()
-        for m in manifests_by_flavor.values():
-            all_manifests |= m
-        all_manifests = list(all_manifests)
+        paths_by_flavor = at.remove_duplicates(paths_by_flavor, tests)
 
-        msg = at.calc_try_syntax(platforms, manifests_by_flavor.keys(), tests,
-                                 extra_tests, builds, all_manifests, tags)
+        msg = at.calc_try_syntax(platforms, tests, builds, paths_by_flavor, tags, extra_args)
 
-        if verbose and manifests_by_flavor:
-            print('Tests from the following manifests will be selected: ')
-            pprint.pprint(manifests_by_flavor)
+        if verbose and paths_by_flavor:
+            print('The following tests will be selected: ')
+            for flavor, paths in paths_by_flavor.iteritems():
+                print("%s: %s" % (flavor, ",".join(paths)))
 
-        if verbose:
-            print('The following try syntax was calculated:\n\n\t%s\n' % msg)
+        if verbose or not push:
+            print('The following try syntax was calculated:\n%s\n' % msg)
 
         if push:
             at.push_to_try(msg, verbose)

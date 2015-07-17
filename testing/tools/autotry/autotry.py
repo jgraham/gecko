@@ -12,20 +12,27 @@ from collections import defaultdict
 
 
 TRY_SYNTAX_TMPL = """
-try: -b %s -p %s -u %s -t none %s %s
+try: -b %s -p %s -u %s -t none %s %s --try-test-paths %s
 """
 
 class AutoTry(object):
 
-    test_flavors = [
-        'browser-chrome',
-        'chrome',
-        'devtools-chrome',
-        'mochitest',
-        'xpcshell',
-        'reftest',
-        'crashtest',
-    ]
+    test_flavors = {
+        'browser-chrome': {},
+        'chrome': {},
+        'devtools-chrome': {},
+        'mochitest': {},
+        'xpcshell' :{},
+        'reftest': {
+            "path": lambda x: os.path.join("tests", x)
+        },
+        'crashtest': {
+            "path": lambda x: os.path.join("tests", x)
+        },
+        'web-platform-tests': {
+            "path": lambda x: x.split(os.path.join("testing", "web-platform"))[1][1:]
+        }
+    }
 
     def __init__(self, topsrcdir, resolver, mach_context):
         self.topsrcdir = topsrcdir
@@ -37,31 +44,41 @@ class AutoTry(object):
         else:
             self._use_git = True
 
-    def manifests_by_flavor(self, paths):
-        manifests_by_flavor = defaultdict(set)
+    def paths_by_flavor(self, paths):
+        paths_by_flavor = defaultdict(set)
 
         if not paths:
-            return dict(manifests_by_flavor)
+            return dict(paths_by_flavor)
 
         tests = list(self.resolver.resolve_tests(paths=paths,
                                                  cwd=self.mach_context.cwd))
+        sorted_paths = list(sorted(paths, key=lambda x:-len(x)))
         for t in tests:
             if t['flavor'] in AutoTry.test_flavors:
                 flavor = t['flavor']
+                path_func = AutoTry.test_flavors[flavor].get("path", lambda x:x)
                 if 'subsuite' in t and t['subsuite'] == 'devtools':
                     flavor = 'devtools-chrome'
-                manifest = os.path.relpath(t['manifest'], self.topsrcdir)
-                manifests_by_flavor[flavor].add(manifest)
+                for path in sorted_paths:
+                    if t['file_relpath'].startswith(path):
+                        paths_by_flavor[flavor].add(path_func(path))
 
-        return dict(manifests_by_flavor)
+        return dict(paths_by_flavor)
 
-    def calc_try_syntax(self, platforms, flavors, tests, extra_tests, builds,
-                        manifests, tags):
+    def remove_duplicates(self, paths_by_flavor, tests):
+        rv = {}
+        for item in paths_by_flavor:
+            if item not in tests:
+                rv[item] = paths_by_flavor[item].copy()
+        return rv
 
-        # Maps from flavors to the try syntax snippets implied by that flavor.
-        # TODO: put selected tests under their own builder/label to avoid
-        # confusion reading results on treeherder.
-        flavor_suites = {
+    def calc_try_syntax(self, platforms, tests, builds, paths_by_flavor, tags, extra_args):
+        #problem: if we specify a directory like foo/bar to reftests and there isn't
+        #a reftest file in foo/bar but there is one in foo/bar/baz, the reftest harness
+        #won't run the tests
+
+        # Maps from flavors to the job names needed to run that flavour
+        flavor_jobs = {
             'mochitest': ['mochitest-1', 'mochitest-e10s-1'],
             'xpcshell': ['xpcshell'],
             'chrome': ['mochitest-o'],
@@ -71,6 +88,7 @@ class AutoTry(object):
                                 'mochitest-e10s-devtools-chrome'],
             'crashtest': ['crashtest', 'crashtest-e10s'],
             'reftest': ['reftest', 'reftest-e10s'],
+            'web-platform-tests': ['web-platform-tests-1']
         }
 
         if tags:
@@ -78,15 +96,24 @@ class AutoTry(object):
         else:
             tags = ''
 
-        if not tests:
-            tests = ','.join(itertools.chain(*(flavor_suites[f] for f in flavors)))
-            if extra_tests:
-                tests += ',%s' % (extra_tests)
+        suites = set(tests)
 
-        manifests = ' '.join(manifests)
-        if manifests:
-            manifests = '--try-test-paths %s' % manifests
-        return TRY_SYNTAX_TMPL % (builds, platforms, tests, manifests, tags)
+        paths = set()
+        for flavor, flavor_tests in paths_by_flavor.iteritems():
+            if flavor not in suites:
+                for job_name in flavor_jobs[flavor]:
+                    for test in flavor_tests:
+                        paths.add("%s:%s" % (flavor, test))
+                    suites.add(job_name)
+        paths = " ".join(sorted(paths))
+
+        suites = " ".join(sorted(suites))
+
+        if extra_args is None:
+            extra_args = []
+        extra_args = " ".join(extra_args)
+
+        return TRY_SYNTAX_TMPL % (builds, platforms, suites, tags, extra_args, paths)
 
     def _run_git(self, *args):
         args = ['git'] + list(args)

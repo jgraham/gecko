@@ -87,32 +87,33 @@ config = {
     },
     # local reftest suites
     "all_reftest_suites": {
-        "reftest": ["tests/reftest/tests/layout/reftests/reftest.list"],
-        "crashtest": ["tests/reftest/tests/testing/crashtest/crashtests.list"],
-        "jsreftest": ["--extra-profile-file=tests/jsreftest/tests/user.js", "tests/jsreftest/tests/jstests.list"],
+        "reftest": {'tests': ["tests/reftest/tests/layout/reftests/reftest.list"]},
+        "crashtest": {'tests': ["tests/reftest/tests/testing/crashtest/crashtests.list"]},
+        "jsreftest": {'options':["--extra-profile-file=tests/jsreftest/tests/user.js"],
+                      'tests': ["tests/jsreftest/tests/jstests.list"]},
         "reftest-ipc": {'env': {'MOZ_OMTC_ENABLED': '1',
                                 'MOZ_DISABLE_CONTEXT_SHARING_GLX': '1'},
                         'options': ['--setpref=browser.tabs.remote=true',
                                     '--setpref=browser.tabs.remote.autostart=true',
                                     '--setpref=layers.offmainthreadcomposition.testing.enabled=true',
-                                    '--setpref=layers.async-pan-zoom.enabled=true',
-                                    'tests/reftest/tests/layout/reftests/reftest-sanity/reftest.list']},
-        "reftest-no-accel": ['--setpref=layers.acceleration.force-enabled=disabled',
-                             'tests/reftest/tests/layout/reftests/reftest.list'],
+                                    '--setpref=layers.async-pan-zoom.enabled=true'],
+                        'tests': ['tests/reftest/tests/layout/reftests/reftest-sanity/reftest.list']},
+        "reftest-no-accel": {'options': ['--setpref=layers.acceleration.force-enabled=disabled'],
+                             'tests': ['tests/reftest/tests/layout/reftests/reftest.list']},
         "crashtest-ipc": {'env': {'MOZ_OMTC_ENABLED': '1',
                                   'MOZ_DISABLE_CONTEXT_SHARING_GLX': '1'},
                           'options': ['--setpref=browser.tabs.remote=true',
                                       '--setpref=browser.tabs.remote.autostart=true',
                                       '--setpref=layers.offmainthreadcomposition.testing.enabled=true',
-                                      '--setpref=layers.async-pan-zoom.enabled=true',
-                                      'tests/reftest/tests/testing/crashtest/crashtests.list']},
+                                      '--setpref=layers.async-pan-zoom.enabled=true'],
+                          'tests': ['tests/reftest/tests/testing/crashtest/crashtests.list']},
     },
     "all_xpcshell_suites": {
-        "xpcshell": ["--manifest=tests/xpcshell/tests/all-test-dirs.list",
-                     "%(abs_app_dir)s/" + XPCSHELL_NAME]
+        "xpcshell": {'options': ["%(abs_app_dir)s/" + XPCSHELL_NAME],
+                     'tests': ["tests/xpcshell/tests/all-test-dirs.list"]},
     },
     "all_cppunittest_suites": {
-        "cppunittest": ['tests/cppunittest']
+        "cppunittest": {'tests': ['tests/cppunittest']}
     },
     "all_jittest_suites": {
         "jittest": [],

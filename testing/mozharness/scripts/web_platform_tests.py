@@ -142,7 +142,14 @@ class WebPlatformTest(TestingMixin, MercurialScript, BlobUploadMixin):
             'abs_work_dir': dirs["abs_work_dir"]
             }
 
+        try_options, try_tests = self.try_args("web-platform-tests")
+        options_list.extend(try_options)
+
         opt_cmd = [item % str_format_values for item in options]
+
+        if try_tests:
+            opt_cmd.append("--")
+            opt_cmd.extend(try_tests)
 
         return base_cmd + opt_cmd
 
@@ -158,7 +165,6 @@ class WebPlatformTest(TestingMixin, MercurialScript, BlobUploadMixin):
     def run_tests(self):
         dirs = self.query_abs_dirs()
         cmd = self._query_cmd()
-        cmd = self.append_harness_extra_args(cmd)
 
         parser = StructuredOutputParser(config=self.config,
                                         log_obj=self.log_obj)
