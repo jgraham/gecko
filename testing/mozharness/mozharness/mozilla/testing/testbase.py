@@ -25,7 +25,7 @@ from mozharness.mozilla.buildbot import BuildbotMixin, TBPL_WARNING
 from mozharness.mozilla.proxxy import Proxxy
 from mozharness.mozilla.structuredlog import StructuredOutputParser
 from mozharness.mozilla.testing.unittest import DesktopUnittestOutputParser
-from mozharness.mozilla.testing.try_tools import TryToolsMixin
+from mozharness.mozilla.testing.try_tools import TryToolsMixin, try_config_options
 from mozharness.mozilla.tooltool import TooltoolMixin
 
 from mozharness.lib.python.authentication import get_credentials
@@ -82,7 +82,7 @@ testing_config_options = [
      "choices": ['ondemand', 'true'],
      "help": "Download and extract crash reporter symbols.",
       }],
-] + copy.deepcopy(virtualenv_config_options)
+] + copy.deepcopy(virtualenv_config_options) + copy.deepcopy(try_config_options)
 
 
 # TestingMixin {{{1
@@ -476,16 +476,20 @@ You can set this by:
             self.dump_config(file_path=os.path.join(dirs['abs_log_dir'], 'treeconfig.json'),
                              config=self.tree_config)
 
-        if (self.buildbot_config and 'properties' in self.buildbot_config and
-            self.buildbot_config['properties'].get('branch') == 'try'):
+        if ((self.buildbot_config and 'properties' in self.buildbot_config and
+             self.buildbot_config['properties'].get('branch') == 'try') or
+            self.config["try_message"]):
             try_config_path = os.path.join(test_install_dir, 'config', 'mozharness',
                                            'try_arguments.py')
             known_try_arguments = parse_config_file(try_config_path)
-            comments = self.buildbot_config['sourcestamp']['changes'][-1]['comments']
-            if not comments and 'try_syntax' in self.buildbot_config['properties']:
-                # If we don't find try syntax in the usual place, check for it in an
-                # alternate property available to tools using self-serve.
-                comments = self.buildbot_config['properties']['try_syntax']
+            if self.config["try_message"]:
+                comments = self.config["try_message"]
+            else:
+                comments = self.buildbot_config['sourcestamp']['changes'][-1]['comments']
+                if not comments and 'try_syntax' in self.buildbot_config['properties']:
+                    # If we don't find try syntax in the usual place, check for it in an
+                    # alternate property available to tools using self-serve.
+                    comments = self.buildbot_config['properties']['try_syntax']
             self.parse_extra_try_arguments(comments, known_try_arguments)
 
         self.tree_config.lock()

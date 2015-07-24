@@ -24,13 +24,13 @@ class AutoTry(object):
         'mochitest': {},
         'xpcshell' :{},
         'reftest': {
-            "path": lambda x: os.path.join("tests", x)
+            "path": lambda x: os.path.join("tests", "reftest", "tests", x)
         },
         'crashtest': {
-            "path": lambda x: os.path.join("tests", x)
+            "path": lambda x: os.path.join("tests", "reftest", "tests", x)
         },
         'web-platform-tests': {
-            "path": lambda x: x.split(os.path.join("testing", "web-platform"))[1][1:]
+            "path": lambda x: os.path.join("tests", x.split("testing" + os.path.sep)[1])
         }
     }
 

@@ -57,6 +57,7 @@ class WebPlatformTest(TestingMixin, MercurialScript, BlobUploadMixin):
         c = self.config
         self.installer_url = c.get('installer_url')
         self.test_url = c.get('test_url')
+        self.test_packages_url = c.get('test_packages_url')
         self.installer_path = c.get('installer_path')
         self.binary_path = c.get('binary_path')
         self.abs_app_dir = None
@@ -143,7 +144,7 @@ class WebPlatformTest(TestingMixin, MercurialScript, BlobUploadMixin):
             }
 
         try_options, try_tests = self.try_args("web-platform-tests")
-        options_list.extend(try_options)
+        options.extend(try_options)
 
         opt_cmd = [item % str_format_values for item in options]
 

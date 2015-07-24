@@ -340,16 +340,18 @@ class DesktopUnittest(TestingMixin, MercurialScript, BlobUploadMixin, MozbaseMix
             abs_res_plugins_dir = os.path.join(abs_res_dir, 'plugins')
             str_format_values['test_plugin_path'] = abs_res_plugins_dir
 
+            options = []
+
             missing_key = True
             if "suite_definitions" in self.tree_config: # new structure
                 if suite_category in self.tree_config["suite_definitions"]:
                     missing_key = False
-                options = self.tree_config["suite_definitions"][suite_category]["options"]
+                options.extend(self.tree_config["suite_definitions"][suite_category]["options"])
             else:
                 suite_options = '%s_options' % suite_category
                 if suite_options in self.tree_config:
                     missing_key = False
-                options = self.tree_config[suite_options]
+                options.extend(self.tree_config[suite_options])
 
             if missing_key:
                 self.fatal("'%s' not defined in the in-tree config! Please add it to '%s'. "
@@ -357,19 +359,22 @@ class DesktopUnittest(TestingMixin, MercurialScript, BlobUploadMixin, MozbaseMix
                            (suite_category,
                             os.path.join('gecko', 'testing', self.config['in_tree_config'])))
 
-            if options:
-                for option in options:
-                    option = option % str_format_values
-                    if not option.endswith('None'):
-                        base_cmd.append(option)
-                return base_cmd
-            else:
+            if not options:
                 self.warning("Suite options for %s could not be determined."
                              "\nIf you meant to have options for this suite, "
                              "please make sure they are specified in your "
                              "config under %s_options" %
                              (suite_category, suite_category))
-                return base_cmd
+
+
+            for option in options:
+                option = option % str_format_values
+                if not option.endswith('None'):
+                    base_cmd.append(option)
+
+            flavor = self._query_try_flavor(suite_category, suite)
+
+            return base_cmd
         else:
             self.fatal("'binary_path' could not be determined.\n This should "
                        "be like '/path/build/application/firefox/firefox'"
@@ -559,26 +564,27 @@ class DesktopUnittest(TestingMixin, MercurialScript, BlobUploadMixin, MozbaseMix
                 if isinstance(suites[suite], dict):
                     options_list = suites[suite].get('options', [])
                     tests_list = suites[suite].get('tests', [])
-                    env = copy.deepcopy(suites[suite]['env'])
+                    env = copy.deepcopy(suites[suite].get('env', {}))
                 else:
                     options_list = suites[suite]
                     tests_list = []
 
-
-                flavor = self._query_try_flavor(suite_category, suite)
-                if flavor:
-                    try_options, try_tests = self.try_args(flavor, cmd)
-                    options_list.extend(try_options)
-                    if try_tests:
-                        tests_list = try_tests
-
                 for arg in options_list:
                     cmd.append(arg % replace_dict)
 
+                flavor = self._query_try_flavor(suite_category, suite)
+                if flavor:
+                    try_options, try_tests = self.try_args(flavor)
+                    if try_tests:
+                        tests_list = try_tests
+
+                    for option in try_options:
+                        option = option % replace_dict
+                        cmd.append(option)
+
                 if tests_list:
-                    arg.append("--")
-                    for arg in tests_list:
-                        cmd.append(arg % replace_dict)
+                    cmd.append("--")
+                    cmd.extend(tests_list)
 
                 suite_name = suite_category + '-' + suite
                 tbpl_status, log_level = None, None

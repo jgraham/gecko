@@ -10,6 +10,15 @@ import os
 import re
 from collections import defaultdict
 
+try_config_options = [
+    [["--try-message"],
+     {"action": "store",
+     "dest": "try_message",
+     "default": None,
+     "help": "try syntax string to select tests to run",
+      }],
+]
+
 class TryToolsMixin(object):
     """Utility functions for an interface between try syntax and out test harnesses.
     Requires log and script mixins."""
@@ -90,14 +99,14 @@ class TryToolsMixin(object):
             rv[suite].append(path)
         return rv
 
-    def try_args(self, flavor, cmd):
+    def try_args(self, flavor):
         """Get arguments, test_list derived from try syntax to apply to a command"""
         # TODO: Detect and reject incompatible arguments
         args = self.harness_extra_args[:] if self.harness_extra_args else []
 
         if self.try_test_paths[flavor]:
             self.info('TinderboxPrint: Tests will be run from the following '
-                      'files: %s.' % ','.join(self.try_test_paths[suite]))
+                      'files: %s.' % ','.join(self.try_test_paths[flavor]))
             args.extend(['--this-chunk=1', '--total-chunks=1'])
             tests = self.try_test_paths[flavor][:]
 
