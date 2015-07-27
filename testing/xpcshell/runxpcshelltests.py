@@ -824,7 +824,7 @@ class XPCShellTests(object):
             test_paths = []
 
         if len(test_paths) == 1 and test_paths[0].endswith(".js"):
-            self.singleFile = path.basepath(test_paths[0])
+            self.singleFile = os.path.basename(test_paths[0])
         else:
             self.singleFile = None
 
@@ -1059,7 +1059,8 @@ class XPCShellTests(object):
                  testingModulesDir=None, pluginsPath=None,
                  testClass=XPCShellTestThread, failureManifest=None,
                  log=None, stream=None, jsDebugger=False, jsDebuggerPort=0,
-                 test_tags=None, utility_path=None, **otherOptions):
+                 test_tags=None, utility_path=None, rerun_failures=False,
+                 failure_manifest=None, **otherOptions):
         """Run xpcshell tests.
 
         |xpcshell|, is the xpcshell executable to use to run the tests.
@@ -1106,6 +1107,16 @@ class XPCShellTests(object):
             if os.path.isdir(possible):
                 testingModulesDir = possible
 
+        if rerun_failures:
+            if os.path.exists(failure_manifest):
+                rerun_manifest = os.path.join(os.path.dirname(failure_manifest), "rerun.ini")
+                shutil.copyfile(failure_manifest, rerun_manifest)
+                os.remove(failure_manifest)
+                manifest = rerun_manifest
+            else:
+                print >> sys.stderr, "No failures were found to re-run."
+                sys.exit(1)
+
         if testingModulesDir:
             # The resource loader expects native paths. Depending on how we were
             # invoked, a UNIX style path may sneak in on Windows. We try to
@@ -1145,6 +1156,7 @@ class XPCShellTests(object):
         self.testingModulesDir = testingModulesDir
         self.pluginsPath = pluginsPath
         self.sequential = sequential
+        self.failure_manifest = failure_manifest
 
         self.testCount = 0
         self.passCount = 0
@@ -1227,7 +1239,7 @@ class XPCShellTests(object):
             'logfiles': self.logfiles,
             'xpcshell': self.xpcshell,
             'xpcsRunArgs': self.xpcsRunArgs,
-            'failureManifest': failureManifest,
+            'failureManifest': self.failure_manifest,
             'harness_timeout': self.harness_timeout,
             'stack_fixer_function': self.stack_fixer_function,
         }

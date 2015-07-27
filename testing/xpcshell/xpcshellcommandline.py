@@ -49,9 +49,6 @@ def parser_common():
     parser.add_argument("--shuffle",
                         action="store_true", dest="shuffle", default=False,
                         help="Execute tests in random order")
-    parser.add_argument("--failure-manifest", dest="failureManifest",
-                        action="store",
-                        help="path to file where failure manifest will be written.")
     parser.add_argument("--xre-path",
                         action="store", type=unicode, dest="xrePath",
                         # individual scripts will set a sane default
@@ -94,6 +91,16 @@ def parser_common():
                         action="store", dest="xpcshell",
                         default=None,
                         help="Path to xpcshell binary")
+    # This argument can be just present, or the path to a manifest file. The
+    # just-present case is usually used for mach which can provide a default
+    # path to the failure file from the previous run
+    parser.add_argument("--rerun-failures",
+                        action="store_true",
+                        help="Rerun failures from the previous run, if any")
+    parser.add_argument("--failure-manifest",
+                        action="store",
+                        help="Path to a manifest file from which to rerun failures "
+                        "(with --rerun-failure) or in which to record failed tests")
     parser.add_argument("testPaths", nargs="*", default=None,
                         help="Paths of tests to run.")
     return parser
