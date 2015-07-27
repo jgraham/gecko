@@ -23,7 +23,7 @@ import traceback
 from collections import deque, namedtuple
 from distutils import dir_util
 from multiprocessing import cpu_count
-from optparse import OptionParser
+from argparse import ArgumentParser
 from subprocess import Popen, PIPE, STDOUT
 from tempfile import mkdtemp, gettempdir
 from threading import (
@@ -40,6 +40,7 @@ except Exception:
     HAVE_PSUTIL = False
 
 from automation import Automation
+from xpcshellcommandline import parser_desktop
 
 SCRIPT_DIR = os.path.abspath(os.path.realpath(os.path.dirname(__file__)))
 
@@ -948,16 +949,6 @@ class XPCShellTests(object):
                 pStderr = STDOUT
         return pStdout, pStderr
 
-    def buildTestPath(self):
-        """
-          If we specifiy a testpath, set the self.testPath variable to be the given directory or file.
-
-          |testPath| will be the optional path only, or |None|.
-          |singleFile| will be the optional test only, or |None|.
-        """
-        self.singleFile = None
-
-
     def verifyDirPath(self, dirname):
         """
           Simple wrapper to get the absolute path for a given directory name.
@@ -1429,108 +1420,10 @@ class XPCShellTests(object):
         self.log.suite_end()
         return self.failCount == 0
 
-class XPCShellOptions(OptionParser):
-    def __init__(self):
-        """Process command line arguments and call runTests() to do the real work."""
-        OptionParser.__init__(self)
-        self.add_option("--app-path",
-                        type="string", dest="appPath", default=None,
-                        help="application directory (as opposed to XRE directory)")
-        self.add_option("--interactive",
-                        action="store_true", dest="interactive", default=False,
-                        help="don't automatically run tests, drop to an xpcshell prompt")
-        self.add_option("--verbose",
-                        action="store_true", dest="verbose", default=False,
-                        help="always print stdout and stderr from tests")
-        self.add_option("--keep-going",
-                        action="store_true", dest="keepGoing", default=False,
-                        help="continue running tests after test killed with control-C (SIGINT)")
-        self.add_option("--logfiles",
-                        action="store_true", dest="logfiles", default=True,
-                        help="create log files (default, only used to override --no-logfiles)")
-        self.add_option("--manifest",
-                        type="string", dest="manifest", default=None,
-                        help="Manifest of test directories to use")
-        self.add_option("--no-logfiles",
-                        action="store_false", dest="logfiles",
-                        help="don't create log files")
-        self.add_option("--sequential",
-                        action="store_true", dest="sequential", default=False,
-                        help="Run all tests sequentially")
-        self.add_option("--testing-modules-dir",
-                        dest="testingModulesDir", default=None,
-                        help="Directory where testing modules are located.")
-        self.add_option("--test-plugin-path",
-                        type="string", dest="pluginsPath", default=None,
-                        help="Path to the location of a plugins directory containing the test plugin or plugins required for tests. "
-                             "By default xpcshell's dir svc provider returns gre/plugins. Use test-plugin-path to add a directory "
-                             "to return for NS_APP_PLUGINS_DIR_LIST when queried.")
-        self.add_option("--total-chunks",
-                        type = "int", dest = "totalChunks", default=1,
-                        help = "how many chunks to split the tests up into")
-        self.add_option("--this-chunk",
-                        type = "int", dest = "thisChunk", default=1,
-                        help = "which chunk to run between 1 and --total-chunks")
-        self.add_option("--profile-name",
-                        type = "string", dest="profileName", default=None,
-                        help="name of application profile being tested")
-        self.add_option("--build-info-json",
-                        type = "string", dest="mozInfo", default=None,
-                        help="path to a mozinfo.json including information about the build configuration. defaults to looking for mozinfo.json next to the script.")
-        self.add_option("--shuffle",
-                        action="store_true", dest="shuffle", default=False,
-                        help="Execute tests in random order")
-        self.add_option("--failure-manifest", dest="failureManifest",
-                        action="store",
-                        help="path to file where failure manifest will be written.")
-        self.add_option("--xre-path",
-                        action = "store", type = "string", dest = "xrePath",
-                        # individual scripts will set a sane default
-                        default = None,
-                        help = "absolute path to directory containing XRE (probably xulrunner)")
-        self.add_option("--symbols-path",
-                        action = "store", type = "string", dest = "symbolsPath",
-                        default = None,
-                        help = "absolute path to directory containing breakpad symbols, or the URL of a zip file containing symbols")
-        self.add_option("--debugger",
-                        action = "store", dest = "debugger",
-                        help = "use the given debugger to launch the application")
-        self.add_option("--debugger-args",
-                        action = "store", dest = "debuggerArgs",
-                        help = "pass the given args to the debugger _before_ "
-                           "the application on the command line")
-        self.add_option("--debugger-interactive",
-                        action = "store_true", dest = "debuggerInteractive",
-                        help = "prevents the test harness from redirecting "
-                          "stdout and stderr for interactive debuggers")
-        self.add_option("--jsdebugger", dest="jsDebugger", action="store_true",
-                        help="Waits for a devtools JS debugger to connect before "
-                             "starting the test.")
-        self.add_option("--jsdebugger-port", type="int", dest="jsDebuggerPort",
-                        default=6000,
-                        help="The port to listen on for a debugger connection if "
-                             "--jsdebugger is specified.")
-        self.add_option("--tag",
-                        action="append", dest="test_tags",
-                        default=None,
-                        help="filter out tests that don't have the given tag. Can be "
-                             "used multiple times in which case the test must contain "
-                             "at least one of the given tags.")
-        self.add_option("--utility-path",
-                        action="store", dest="utility_path",
-                        default=None,
-                        help="Path to a directory containing utility programs, such "
-                             "as stack fixer scripts.")
-        self.add_option("--xpcshell",
-                        action="store", dest="xpcshell",
-                        default=None,
-                        help="Path to xpcshell binary")
-
 def main():
-    parser = XPCShellOptions()
+    parser = parser_desktop()
     commandline.add_logging_group(parser)
-    options, args = parser.parse_args()
-
+    options = parser.parse_args()
 
     log = commandline.setup_logging("XPCShell", options, {"tbpl": sys.stdout})
 
@@ -1543,7 +1436,7 @@ def main():
         print >>sys.stderr, "Error: You must specify a test filename in interactive mode!"
         sys.exit(1)
 
-    if not xpcsh.runTests(testPaths=args, **options.__dict__):
+    if not xpcsh.runTests(**var(options)):
         sys.exit(1)
 
 if __name__ == '__main__':
