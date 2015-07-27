@@ -107,7 +107,7 @@ class AutoTry(object):
                     suites.add(job_name)
         paths = " ".join(sorted(paths))
 
-        suites = " ".join(sorted(suites))
+        suites = ",".join(sorted(suites))
 
         if extra_args is None:
             extra_args = []

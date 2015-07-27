@@ -478,11 +478,11 @@ You can set this by:
 
         if ((self.buildbot_config and 'properties' in self.buildbot_config and
              self.buildbot_config['properties'].get('branch') == 'try') or
-            self.config["try_message"]):
+            self.config.get("try_message")):
             try_config_path = os.path.join(test_install_dir, 'config', 'mozharness',
                                            'try_arguments.py')
             known_try_arguments = parse_config_file(try_config_path)
-            if self.config["try_message"]:
+            if self.config.get("try_message"):
                 comments = self.config["try_message"]
             else:
                 comments = self.buildbot_config['sourcestamp']['changes'][-1]['comments']
