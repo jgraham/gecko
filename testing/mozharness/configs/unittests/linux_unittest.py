@@ -113,8 +113,9 @@ config = {
                           'tests': ['tests/reftest/tests/testing/crashtest/crashtests.list']},
     },
     "all_xpcshell_suites": {
-        "xpcshell": {'options': ["%(abs_app_dir)s/" + XPCSHELL_NAME],
-                     'tests': ["tests/xpcshell/tests/all-test-dirs.list"]},
+        "xpcshell": {'options': ["--xpcshell=%(abs_app_dir)s/" + XPCSHELL_NAME,
+                                 "--manifest=tests/xpcshell/tests/all-test-dirs.list"],
+                     'tests': []},
     },
     "all_cppunittest_suites": {
         "cppunittest": {'tests': ['tests/cppunittest']}
