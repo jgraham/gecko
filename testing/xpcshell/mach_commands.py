@@ -25,7 +25,7 @@ from mach.decorators import (
     Command,
 )
 
-from xpcshellcommandline import parser_desktop
+from xpcshellcommandline import parser_desktop, parser_remote, parser_b2g
 
 ADB_NOT_FOUND = '''
 The %s command requires the adb binary to be on your path.
@@ -156,12 +156,7 @@ class AndroidXPCShellRunner(MozbuildObject):
         return dm
 
     """Run Android xpcshell tests."""
-    def run_test(self,
-                 test_paths, keep_going,
-                 devicemanager, ip, port, remote_test_root, no_setup, local_apk,
-                 test_objects=None, log=None,
-                 # ignore parameters from other platforms' options
-                 **kwargs):
+    def run_test(self, **kwargs):
         # TODO Bug 794506 remove once mach integrates with virtualenv.
         build_path = os.path.join(self.topobjdir, 'build')
         if build_path not in sys.path:
@@ -171,57 +166,44 @@ class AndroidXPCShellRunner(MozbuildObject):
 
         dm = self.get_devicemanager(devicemanager, ip, port, remote_test_root)
 
-        options = remotexpcshelltests.RemoteXPCShellOptions()
-        options.shuffle = False
-        options.sequential = True
-        options.interactive = False
-        options.debugger = None
-        options.debuggerArgs = None
-        options.setup = not no_setup
-        options.keepGoing = keep_going
-        options.objdir = self.topobjdir
-        options.localLib = os.path.join(self.topobjdir, 'dist/fennec')
-        options.localBin = os.path.join(self.topobjdir, 'dist/bin')
-        options.testingModulesDir = os.path.join(self.topobjdir, '_tests/modules')
-        options.mozInfo = os.path.join(self.topobjdir, 'mozinfo.json')
-        options.manifest = os.path.join(self.topobjdir, '_tests/xpcshell/xpcshell.ini')
-        options.symbolsPath = os.path.join(self.distdir, 'crashreporter-symbols')
-        if local_apk:
-            options.localAPK = local_apk
-        else:
-            for file in os.listdir(os.path.join(options.objdir, "dist")):
-                if file.endswith(".apk") and file.startswith("fennec"):
-                    options.localAPK = os.path.join(options.objdir, "dist")
-                    options.localAPK = os.path.join(options.localAPK, file)
+
+        if not kwargs["objdir"]:
+            kwargs["objdir"] = self.topobjdir
+
+        if not kwargs["localLib"]:
+            kwargs["localLib"] = os.path.join(self.topobjdir, 'dist/fennec')
+
+        if not kwargs["localBin"]:
+            kwargs["localBin"] = os.path.join(self.topobjdir, 'dist/bin')
+
+        if not kwargs["testingModulesDir"]:
+            kwargs["testingModulesDir"] = os.path.join(self.topobjdir, '_tests/modules')
+
+        if not kwargs["mozInfo"]:
+            kwargs["mozInfo"] = os.path.join(self.topobjdir, 'mozinfo.json')
+
+        if not kwargs["manifest"]:
+            kwargs["manifest"] = os.path.join(self.topobjdir, '_tests/xpcshell/xpcshell.ini')
+
+        if not kwargs["symbolsPath"]:
+            kwars["symbolsPath"] = os.path.join(self.distdir, 'crashreporter-symbols')
+
+        if not kwargs["localAPK"]
+            for file_name in os.listdir(os.path.join(options.objdir, "dist")):
+                if file_name.endswith(".apk") and file_name.startswith("fennec"):
+                    kwargs["localAPK"] = os.path.join(options.objdir, "dist", file_name)
                     print ("using APK: " + options.localAPK)
                     break
             else:
                 raise Exception("You must specify an APK")
 
-        if test_paths == ['all']:
-            testdirs = []
-            options.testPath = None
-            options.verbose = False
-        elif test_objects:
-            if len(test_objects) > 1:
-                print('Warning: only the first test will be used.')
-            testdirs = test_objects[0]['dir_relpath']
-            options.testPath = test_objects[0]['path']
-            options.verbose = True
-        else:
-            if len(test_paths) > 1:
-                print('Warning: only the first test path argument will be used.')
-            testdirs = test_paths[0]
-            options.testPath = test_paths[0]
-            options.verbose = True
-
-        xpcshell = remotexpcshelltests.XPCShellRemote(dm, options, testdirs, log)
+        options = argparse.Namespace(**kwargs)
+        xpcshell = remotexpcshelltests.XPCShellRemote(dm, options, log)
 
         result = xpcshell.runTests(xpcshell='xpcshell',
-                      testClass=remotexpcshelltests.RemoteXPCShellTestThread,
-                      testdirs=testdirs,
-                      mobileArgs=xpcshell.mobileArgs,
-                      **options.__dict__)
+                                   testClass=remotexpcshelltests.RemoteXPCShellTestThread,
+                                   mobileArgs=xpcshell.mobileArgs,
+                                   **options.__dict__)
 
 
         return int(not result)
@@ -269,10 +251,7 @@ class B2GXPCShellRunner(MozbuildObject):
             f.write(data.read())
         return busybox_path
 
-    def run_test(self, test_paths, b2g_home=None, busybox=None, device_name=None,
-                 test_objects=None, log=None,
-                 # ignore parameters from other platforms' options
-                 **kwargs):
+    def run_test(self, **kwargs):
         try:
             import which
             which.which('adb')
@@ -281,49 +260,45 @@ class B2GXPCShellRunner(MozbuildObject):
             print(ADB_NOT_FOUND % ('mochitest-remote', b2g_home))
             sys.exit(1)
 
-        test_path = None
-        if test_objects:
-            if len(test_objects) > 1:
-                print('Warning: Only the first test will be used.')
-
-            test_path = self._wrap_path_argument(test_objects[0]['path'])
-        elif test_paths:
-            if len(test_paths) > 1:
-                print('Warning: Only the first test path will be used.')
-
-            test_path = self._wrap_path_argument(test_paths[0]).relpath()
-
         import runtestsb2g
-        parser = runtestsb2g.B2GOptions()
-        options, args = parser.parse_args([])
 
-        options.b2g_path = b2g_home
-        options.busybox = busybox or os.environ.get('BUSYBOX')
-        options.localLib = self.bin_dir
-        options.localBin = self.bin_dir
-        options.logdir = self.xpcshell_dir
-        options.manifest = os.path.join(self.xpcshell_dir, 'xpcshell.ini')
-        options.mozInfo = os.path.join(self.topobjdir, 'mozinfo.json')
-        options.objdir = self.topobjdir
-        options.symbolsPath = os.path.join(self.distdir, 'crashreporter-symbols'),
-        options.testingModulesDir = os.path.join(self.tests_dir, 'modules')
-        options.testPath = test_path
-        options.use_device_libs = True
+        is kwargs["busybox"] is None:
+            kwargs["busybox"] = os.environ.get('BUSYBOX')
+        if kwargs["localLib"] is None:
+            kwargs["localLib"] = self.bin_dir
+        if kwargs["localBin"] is None:
+            kwargs["localBin"] = self.bin_dir
+        if kwargs["logdir"] is None:
+            kwargs["logdir"] = self.xpcshell_dir
+        if kwargs["manifest"] is None:
+            kwargs["manifest"] = os.path.join(self.xpcshell_dir, 'xpcshell.ini')
+        if kwargs["mozInfo"] is None:
+            kwargs["mozInfo"] = os.path.join(self.topobjdir, 'mozinfo.json')
+        if kwargs["objdir"] is None:
+            kwargs["objdir"] = self.topobjdir
+        if kwargs["symbolsPath"] is None:
+            kwargs["symbolsPath"] = os.path.join(self.distdir, 'crashreporter-symbols'),
+        if kwargs["testingModulesDir"] is None:
+            options.testingModulesDir = os.path.join(self.tests_dir, 'modules')
+        if kwargs["use_device_libs"] is None:
+            kwargs["use_device_libs"] = True
 
-        options.emulator = 'arm'
-        if device_name.startswith('emulator'):
-            if 'x86' in device_name:
-                options.emulator = 'x86'
+        if kwargs["device_name"].startswith('emulator') and 'x86' in kwargs["device_name"]:
+            kwargs["emulator"] = 'x86'
 
-        if not options.busybox:
-            options.busybox = self._download_busybox(b2g_home, options.emulator)
+        if kwargs["busybox"] is None:
+            kwargs["busybox"] = self._download_busybox(b2g_home, options.emulator)
 
-        return runtestsb2g.run_remote_xpcshell(parser, options, args, log)
+        return runtestsb2g.run_remote_xpcshell(parser, argparse.Namespace(kwargs), log)
 
 
 def get_parser():
     build_obj = MozbuildObject.from_environment(cwd=here)
-    if conditions.is_firefox(build_obj):
+    if conditions.is_android(build_obj):
+        return parser_remote()
+    elif conditions.is_b2g():
+        return parser_b2g()
+    else:
         return parser_desktop()
 
 @CommandProvider
