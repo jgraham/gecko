@@ -182,7 +182,7 @@ def parser_b2g():
     parser.add_argument('--busybox', action='store', type=unicode, dest='busybox',
                         help="Path to busybox binary to install on device")
 
-    defaults = {"remoteTestRoot": "/data/local/tests"
+    defaults = {"remoteTestRoot": "/data/local/tests",
                 "dm_trans": "adb"}
 
     parser.set_defaults(defaults)

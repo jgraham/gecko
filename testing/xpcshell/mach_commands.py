@@ -188,7 +188,7 @@ class AndroidXPCShellRunner(MozbuildObject):
         if not kwargs["symbolsPath"]:
             kwars["symbolsPath"] = os.path.join(self.distdir, 'crashreporter-symbols')
 
-        if not kwargs["localAPK"]
+        if not kwargs["localAPK"]:
             for file_name in os.listdir(os.path.join(options.objdir, "dist")):
                 if file_name.endswith(".apk") and file_name.startswith("fennec"):
                     kwargs["localAPK"] = os.path.join(options.objdir, "dist", file_name)
@@ -262,8 +262,11 @@ class B2GXPCShellRunner(MozbuildObject):
 
         import runtestsb2g
 
-        is kwargs["busybox"] is None:
+        if kwargs["busybox"] is None:
             kwargs["busybox"] = os.environ.get('BUSYBOX')
+        if kwargs["busybox"] is None:
+            kwargs["busybox"] = self._download_busybox(b2g_home, options.emulator)
+
         if kwargs["localLib"] is None:
             kwargs["localLib"] = self.bin_dir
         if kwargs["localBin"] is None:
@@ -286,9 +289,6 @@ class B2GXPCShellRunner(MozbuildObject):
         if kwargs["device_name"].startswith('emulator') and 'x86' in kwargs["device_name"]:
             kwargs["emulator"] = 'x86'
 
-        if kwargs["busybox"] is None:
-            kwargs["busybox"] = self._download_busybox(b2g_home, options.emulator)
-
         return runtestsb2g.run_remote_xpcshell(parser, argparse.Namespace(kwargs), log)
 
 
@@ -296,7 +296,7 @@ def get_parser():
     build_obj = MozbuildObject.from_environment(cwd=here)
     if conditions.is_android(build_obj):
         return parser_remote()
-    elif conditions.is_b2g():
+    elif conditions.is_b2g(build_obj):
         return parser_b2g()
     else:
         return parser_desktop()
