@@ -99,7 +99,7 @@ class RemoteXPCShellTestThread(xpcshell.XPCShellTestThread):
         return (list(sanitize_list(test['head'], 'head')),
                 list(sanitize_list(test['tail'], 'tail')))
 
-    def buildXpcsCmd(self, testdir):
+    def buildXpcsCmd(self):
         # change base class' paths to remote paths and use base class to build command
         self.xpcshell = remoteJoin(self.remoteBinDir, "xpcw")
         self.headJSPath = remoteJoin(self.remoteScriptsDir, 'head.js')
@@ -107,7 +107,7 @@ class RemoteXPCShellTestThread(xpcshell.XPCShellTestThread):
         self.httpdManifest = remoteJoin(self.remoteComponentsDir, 'httpd.manifest')
         self.testingModulesDir = self.remoteModulesDir
         self.testharnessdir = self.remoteScriptsDir
-        xpcshell.XPCShellTestThread.buildXpcsCmd(self, testdir)
+        xpcshell.XPCShellTestThread.buildXpcsCmd(self)
         # remove "-g <dir> -a <dir>" and add "--greomni <apk>"
         del(self.xpcsCmd[1:5])
         if self.options.localAPK:
@@ -488,8 +488,8 @@ class XPCShellRemote(xpcshell.XPCShellTests, object):
             self.device.removeDir(self.remoteMinidumpDir)
         self.device.mkDir(self.remoteMinidumpDir)
 
-    def buildTestList(self, test_tags=None):
-        xpcshell.XPCShellTests.buildTestList(self, test_tags=test_tags)
+    def buildTestList(self, test_tags=None, test_paths=None):
+        xpcshell.XPCShellTests.buildTestList(self, test_tags=test_tags, test_paths=test_paths)
         uniqueTestPaths = set([])
         for test in self.alltests:
             uniqueTestPaths.add(test['here'])
@@ -498,37 +498,37 @@ class XPCShellRemote(xpcshell.XPCShellTests, object):
             remoteScriptDir = remoteJoin(self.remoteScriptsDir, abbrevTestDir)
             self.pathMapping.append(PathMapping(testdir, remoteScriptDir))
 
-    def verifyRemoteOptions(self, options):
-        if options.localLib is None:
-            if options.localAPK and options.objdir:
-                for path in ['dist/fennec', 'fennec/lib']:
-                    options.localLib = os.path.join(options.objdir, path)
-                    if os.path.isdir(options.localLib):
-                        break
-                else:
-                    self.error("Couldn't find local library dir, specify --local-lib-dir")
-            elif options.objdir:
-                options.localLib = os.path.join(options.objdir, 'dist/bin')
-            elif os.path.isfile(os.path.join(here, '..', 'bin', 'xpcshell')):
-                # assume tests are being run from a tests.zip
-                options.localLib = os.path.abspath(os.path.join(here, '..', 'bin'))
+def verifyRemoteOptions(parser, options):
+    if options.localLib is None:
+        if options.localAPK and options.objdir:
+            for path in ['dist/fennec', 'fennec/lib']:
+                options.localLib = os.path.join(options.objdir, path)
+                if os.path.isdir(options.localLib):
+                    break
             else:
-                self.error("Couldn't find local library dir, specify --local-lib-dir")
+                parser.error("Couldn't find local library dir, specify --local-lib-dir")
+        elif options.objdir:
+            options.localLib = os.path.join(options.objdir, 'dist/bin')
+        elif os.path.isfile(os.path.join(here, '..', 'bin', 'xpcshell')):
+            # assume tests are being run from a tests.zip
+            options.localLib = os.path.abspath(os.path.join(here, '..', 'bin'))
+        else:
+            parser.error("Couldn't find local library dir, specify --local-lib-dir")
 
-        if options.localBin is None:
-            if options.objdir:
-                for path in ['dist/bin', 'bin']:
-                    options.localBin = os.path.join(options.objdir, path)
-                    if os.path.isdir(options.localBin):
-                        break
-                else:
-                    self.error("Couldn't find local binary dir, specify --local-bin-dir")
-            elif os.path.isfile(os.path.join(here, '..', 'bin', 'xpcshell')):
-                # assume tests are being run from a tests.zip
-                options.localBin = os.path.abspath(os.path.join(here, '..', 'bin'))
+    if options.localBin is None:
+        if options.objdir:
+            for path in ['dist/bin', 'bin']:
+                options.localBin = os.path.join(options.objdir, path)
+                if os.path.isdir(options.localBin):
+                    break
             else:
-                self.error("Couldn't find local binary dir, specify --local-bin-dir")
-        return options
+                parser.error("Couldn't find local binary dir, specify --local-bin-dir")
+        elif os.path.isfile(os.path.join(here, '..', 'bin', 'xpcshell')):
+            # assume tests are being run from a tests.zip
+            options.localBin = os.path.abspath(os.path.join(here, '..', 'bin'))
+        else:
+            parser.error("Couldn't find local binary dir, specify --local-bin-dir")
+    return options
 
 class PathMapping:
 
@@ -555,7 +555,7 @@ def main():
             print >>sys.stderr, "Error: please specify an APK"
             sys.exit(1)
 
-    options = parser.verifyRemoteOptions(options)
+    options = verifyRemoteOptions(parser, options)
     log = commandline.setup_logging("Remote XPCShell",
                                     options,
                                     {"tbpl": sys.stdout})

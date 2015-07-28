@@ -9,7 +9,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.realpath(os.path.dirname(sys.argv[0]))))
 
 import traceback
-from remotexpcshelltests import RemoteXPCShellTestThread, XPCShellRemote, RemoteXPCShellOptions
+import remotexpcshelltests
+from remotexpcshelltests import RemoteXPCShellTestThread, XPCShellRemote
 from mozdevice import devicemanagerADB, DMError
 from mozlog import commandline
 
@@ -75,19 +76,19 @@ class B2GXPCShellRemote(XPCShellRemote):
                 self.env['LD_LIBRARY_PATH'] = '/system/b2g'
                 self.options.use_device_libs = True
 
-    def verifyRemoteOptions(self, options):
-        if options.b2g_path is None:
-            self.error("Need to specify a --b2gpath")
+def verifyRemoteOptions(parser, options):
+    if options.b2g_path is None:
+        parser.error("Need to specify a --b2gpath")
 
-        if options.geckoPath and not options.emulator:
-            self.error("You must specify --emulator if you specify --gecko-path")
+    if options.geckoPath and not options.emulator:
+        parser.error("You must specify --emulator if you specify --gecko-path")
 
-        if options.logdir and not options.emulator:
-            self.error("You must specify --emulator if you specify --logdir")
-        return RemoteXPCShellOptions.verifyRemoteOptions(self, options)
+    if options.logdir and not options.emulator:
+        parser.error("You must specify --emulator if you specify --logdir")
+    return remotexpcshelltests.verifyRemoteOptions(parser, options)
 
 def run_remote_xpcshell(parser, options, log):
-    options = parser.verifyRemoteOptions(options)
+    options = verifyRemoteOptions(parser, options)
 
     # Create the Marionette instance
     kwargs = {}
@@ -133,8 +134,7 @@ def run_remote_xpcshell(parser, options, log):
     options.sequential = True
 
     try:
-        if not xpcsh.runTests(xpcshell='xpcshell',
-                              testClass=B2GXPCShellTestThread,
+        if not xpcsh.runTests(testClass=B2GXPCShellTestThread,
                               mobileArgs=xpcsh.mobileArgs,
                               **vars(options)):
             sys.exit(1)

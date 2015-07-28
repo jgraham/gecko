@@ -35,11 +35,11 @@ def parser_common():
                         "By default xpcshell's dir svc provider returns gre/plugins. Use test-plugin-path to add a directory "
                         "to return for NS_APP_PLUGINS_DIR_LIST when queried.")
     parser.add_argument("--total-chunks",
-                        type=int, dest = "totalChunks", default=1,
-                        help = "how many chunks to split the tests up into")
+                        type=int, dest="totalChunks", default=1,
+                        help="how many chunks to split the tests up into")
     parser.add_argument("--this-chunk",
-                        type=int, dest = "thisChunk", default=1,
-                        help = "which chunk to run between 1 and --total-chunks")
+                        type=int, dest="thisChunk", default=1,
+                        help="which chunk to run between 1 and --total-chunks")
     parser.add_argument("--profile-name",
                         type=unicode, dest="profileName", default=None,
                         help="name of application profile being tested")
@@ -52,22 +52,22 @@ def parser_common():
     parser.add_argument("--xre-path",
                         action="store", type=unicode, dest="xrePath",
                         # individual scripts will set a sane default
-                        default = None,
-                        help = "absolute path to directory containing XRE (probably xulrunner)")
+                        default=None,
+                        help="absolute path to directory containing XRE (probably xulrunner)")
     parser.add_argument("--symbols-path",
-                        action = "store", type=unicode, dest = "symbolsPath",
-                        default = None,
-                        help = "absolute path to directory containing breakpad symbols, or the URL of a zip file containing symbols")
+                        action="store", type=unicode, dest="symbolsPath",
+                        default=None,
+                        help="absolute path to directory containing breakpad symbols, or the URL of a zip file containing symbols")
     parser.add_argument("--debugger",
-                        action = "store", dest = "debugger",
-                        help = "use the given debugger to launch the application")
+                        action="store", dest="debugger",
+                        help="use the given debugger to launch the application")
     parser.add_argument("--debugger-args",
-                        action = "store", dest = "debuggerArgs",
-                        help = "pass the given args to the debugger _before_ "
+                        action="store", dest="debuggerArgs",
+                        help="pass the given args to the debugger _before_ "
                         "the application on the command line")
     parser.add_argument("--debugger-interactive",
-                        action = "store_true", dest = "debuggerInteractive",
-                        help = "prevents the test harness from redirecting "
+                        action="store_true", dest="debuggerInteractive",
+                        help="prevents the test harness from redirecting "
                         "stdout and stderr for interactive debuggers")
     parser.add_argument("--jsdebugger", dest="jsDebugger", action="store_true",
                         help="Waits for a devtools JS debugger to connect before "
@@ -182,9 +182,7 @@ def parser_b2g():
     parser.add_argument('--busybox', action='store', type=unicode, dest='busybox',
                         help="Path to busybox binary to install on device")
 
-    defaults = {"remoteTestRoot": "/data/local/tests",
-                "dm_trans": "adb"}
-
-    parser.set_defaults(defaults)
+    parser.set_defaults(remoteTestRoot="/data/local/tests",
+                        dm_trans="adb")
 
     return parser

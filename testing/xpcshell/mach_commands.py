@@ -166,6 +166,8 @@ class AndroidXPCShellRunner(MozbuildObject):
 
         dm = self.get_devicemanager(devicemanager, ip, port, remote_test_root)
 
+        log = kwargs.pop("log")
+        self.log_manager.enable_unstructured()
 
         if not kwargs["objdir"]:
             kwargs["objdir"] = self.topobjdir
@@ -189,10 +191,10 @@ class AndroidXPCShellRunner(MozbuildObject):
             kwars["symbolsPath"] = os.path.join(self.distdir, 'crashreporter-symbols')
 
         if not kwargs["localAPK"]:
-            for file_name in os.listdir(os.path.join(options.objdir, "dist")):
+            for file_name in os.listdir(os.path.join(kwargs["objdir"], "dist")):
                 if file_name.endswith(".apk") and file_name.startswith("fennec"):
-                    kwargs["localAPK"] = os.path.join(options.objdir, "dist", file_name)
-                    print ("using APK: " + options.localAPK)
+                    kwargs["localAPK"] = os.path.join(kwargs["objdir"], "dist", file_name)
+                    print ("using APK: %s" % kwargs["localAPK"])
                     break
             else:
                 raise Exception("You must specify an APK")
@@ -203,8 +205,9 @@ class AndroidXPCShellRunner(MozbuildObject):
         result = xpcshell.runTests(xpcshell='xpcshell',
                                    testClass=remotexpcshelltests.RemoteXPCShellTestThread,
                                    mobileArgs=xpcshell.mobileArgs,
-                                   **options.__dict__)
+                                   **vargs(options))
 
+        self.log_manager.disable_unstructured()
 
         return int(not result)
 
@@ -257,15 +260,22 @@ class B2GXPCShellRunner(MozbuildObject):
             which.which('adb')
         except which.WhichError:
             # TODO Find adb automatically if it isn't on the path
-            print(ADB_NOT_FOUND % ('mochitest-remote', b2g_home))
+            print(ADB_NOT_FOUND % ('mochitest-remote', kwargs["b2g_home"]))
             sys.exit(1)
 
         import runtestsb2g
 
+        log = kwargs.pop("log")
+        self.log_manager.enable_unstructured()
+
+        if kwargs["xpcshell"] is None:
+            kwargs["xpcshell"] = "xpcshell"
+        if kwargs["b2g_path"] is None:
+            kwargs["b2g_path"] = kwargs["b2g_home"]
         if kwargs["busybox"] is None:
             kwargs["busybox"] = os.environ.get('BUSYBOX')
         if kwargs["busybox"] is None:
-            kwargs["busybox"] = self._download_busybox(b2g_home, options.emulator)
+            kwargs["busybox"] = self._download_busybox(kwargs["b2g_home"], kwargs["emulator"])
 
         if kwargs["localLib"] is None:
             kwargs["localLib"] = self.bin_dir
@@ -280,17 +290,21 @@ class B2GXPCShellRunner(MozbuildObject):
         if kwargs["objdir"] is None:
             kwargs["objdir"] = self.topobjdir
         if kwargs["symbolsPath"] is None:
-            kwargs["symbolsPath"] = os.path.join(self.distdir, 'crashreporter-symbols'),
+            kwargs["symbolsPath"] = os.path.join(self.distdir, 'crashreporter-symbols')
         if kwargs["testingModulesDir"] is None:
-            options.testingModulesDir = os.path.join(self.tests_dir, 'modules')
+            kwargs["testingModulesDir"] = os.path.join(self.tests_dir, 'modules')
         if kwargs["use_device_libs"] is None:
             kwargs["use_device_libs"] = True
 
         if kwargs["device_name"].startswith('emulator') and 'x86' in kwargs["device_name"]:
             kwargs["emulator"] = 'x86'
 
-        return runtestsb2g.run_remote_xpcshell(parser, argparse.Namespace(kwargs), log)
+        parser = parser_b2g()
+        options = argparse.Namespace(**kwargs)
+        rv = runtestsb2g.run_remote_xpcshell(parser, options, log)
 
+        self.log_manager.disable_unstructured()
+        return rv
 
 def get_parser():
     build_obj = MozbuildObject.from_environment(cwd=here)
@@ -310,8 +324,8 @@ class MachCommands(MachCommandBase):
             setattr(self, attr, getattr(context, attr, None))
 
     @Command('xpcshell-test', category='testing',
-        description='Run XPCOM Shell tests (API direct unit testing)',
-        conditions=[lambda *args: True],
+             description='Run XPCOM Shell tests (API direct unit testing)',
+             conditions=[lambda *args: True],
              parser=get_parser)
     def run_xpcshell_test(self, **params):
         from mozbuild.controller.building import BuildDriver
