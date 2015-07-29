@@ -1950,9 +1950,10 @@ class Mochitest(MochitestUtilsMixin):
                 exists=False, disabled=disabled, filters=filters, **info)
 
             if len(tests) == 0:
-                self.log.error("no tests to run using specified "
-                               "combination of filters: {}".format(
-                                    manifest.fmt_filters()))
+                self.log.warning("no tests to run using specified "
+                                 "combination of filters: {}".format(
+                                     manifest.fmt_filters()))
+                sys.exit(0)
 
         paths = []
         for test in tests:
