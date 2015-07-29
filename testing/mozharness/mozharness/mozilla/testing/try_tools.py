@@ -94,6 +94,10 @@ class TryToolsMixin(object):
 
     def _group_test_paths(self, args):
         rv = defaultdict(list)
+
+        if args is None:
+            return rv
+
         for item in args:
             suite, path = item.split(":", 1)
             rv[suite].append(path)
