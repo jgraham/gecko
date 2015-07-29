@@ -2,13 +2,46 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import sys
-import os
+import argparse
 import itertools
+import os
 import subprocess
+import sys
 import which
 
 from collections import defaultdict
+
+import ConfigParser
+
+TRY_SYNTAX_TMPL = """
+try: -b %s -p %s -u %s -t none %s %s --try-test-paths %s
+"""
+
+def parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('paths', nargs='*', help='Paths to search for tests to run on try.')
+    parser.add_argument('-p', dest='platforms', nargs="*",
+                        help='Platforms to run. (required if not found in the environment)')
+    parser.add_argument('-u', dest='tests', nargs="*",
+                        help='Test suites to run in their entirety')
+    parser.add_argument('-b', dest='builds', default='do',
+                        help='Build types to run (d for debug, o for optimized)')
+    parser.add_argument('--tag', dest='tags', action='append',
+                        help='Restrict tests to the given tag (may be specified multiple times)')
+    parser.add_argument('--no-push', dest='_push', action='store_false',
+                        help='Do not push to try as a result of running this command (if '
+                        'specified this command will only print calculated try '
+                        'syntax and selection info).')
+    parser.add_argument('--save', dest="_save", action='store',
+                        help="Save the command line arguments for future use with --preset")
+    parser.add_argument('--preset', dest="_load", action='store',
+                        help="Load a saved set of arguments. Additional arguments will override saved ones")
+    parser.add_argument('extra_args', nargs=argparse.REMAINDER,
+                        help='Extra arguments to put in the try push')
+    parser.add_argument('-v', dest='_verbose', action='store_true', default=False,
+                        help='Print detailed information about the resulting test selection '
+                        'and commands performed.')
+    return parser
 
 class AutoTry(object):
 
@@ -38,6 +71,41 @@ class AutoTry(object):
             self._use_git = False
         else:
             self._use_git = True
+
+    def load_config(self, name):
+        config_file = os.path.join(self.topsrcdir, "mach.ini")
+        config = ConfigParser.RawConfigParser()
+        success = config.read([config_file])
+        if not success:
+            return None
+
+        try:
+            data = config.get("try", name)
+        except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
+            return None
+
+        kwargs = vars(parser().parse_args(data.split()))
+
+        for item in kwargs.keys():
+            if item.startswith("_"):
+                kwargs.pop(item)
+
+        return kwargs
+
+    def save_config(self, name, data):
+        assert data.startswith("try: ")
+        data = data[len("try: "):]
+
+        config_file = os.path.join(self.topsrcdir, "mach.ini")
+        parser = ConfigParser.RawConfigParser()
+
+        if not parser.has_section("try"):
+            parser.add_section("try")
+
+        parser.set("try", name, data)
+
+        with open(config_file, "w") as f:
+            parser.write(f)
 
     def paths_by_flavor(self, paths):
         paths_by_flavor = defaultdict(set)

@@ -16,6 +16,8 @@ from mach.decorators import (
 
 from mozbuild.base import MachCommandBase
 
+import autotry
+
 
 UNKNOWN_TEST = '''
 I was unable to find tests in the argument(s) given.
@@ -391,23 +393,25 @@ class JsapiTestsCommand(MachCommandBase):
 @CommandProvider
 class PushToTry(MachCommandBase):
 
-    def validate_args(self, paths, tests, builds, platforms):
-        if not len(paths) and not tests:
+    def normalise_list(self, items):
+        rv = []
+        for item in items:
+            rv.extend(x.strip() for x in item.split(",") if x.strip())
+        return rv
+
+    def validate_args(self, **kwargs):
+        if not len(kwargs["paths"]) and not kwargs["tests"]:
             print("Paths or tests must be specified as an argument to autotry.")
             sys.exit(1)
 
-        if platforms is None:
-            platforms = os.environ['AUTOTRY_PLATFORM_HINT']
+        if kwargs["platforms"] is None:
+            print("Platforms must be specified as an argument to autotry")
 
-        rv_platforms = []
-        for item in platforms:
-            rv_platforms.extend(x for x in item.split(",") if x for item in platforms)
+        platforms = self.normalise_list(kwargs["platforms"])
+        tests = self.normalise_list(kwargs["tests"]) if kwargs["tests"] else []
 
-        rv_tests = []
-        for item in tests:
-            rv_tests.extend(x for x in item.split(",") if x for item in tests)
-
-        for p in paths:
+        paths = []
+        for p in kwargs["paths"]:
             p = os.path.normpath(os.path.abspath(p))
             if not p.startswith(self.topsrcdir):
                 print('Specified path "%s" is outside of the srcdir, unable to'
@@ -417,30 +421,17 @@ class PushToTry(MachCommandBase):
                 print('Specified path "%s" is at the top of the srcdir and would'
                       ' select all tests.' % p)
                 sys.exit(1)
+            paths.append(os.path.relpath(p, self.topsrcdir))
 
-        return builds, rv_platforms, rv_tests
+        tags = self.normalise_list(kwargs["tags"]) if kwargs["tags"] else []
 
-    @Command('try', category='testing', description='Push selected tests to the try server')
-    @CommandArgument('paths', nargs='*', help='Paths to search for tests to run on try.')
-    @CommandArgument('-v', dest='verbose', action='store_true', default=False,
-                     help='Print detailed information about the resulting test selection '
-                          'and commands performed.')
-    @CommandArgument('-p', dest='platforms', required='AUTOTRY_PLATFORM_HINT' not in os.environ,
-                     nargs="*", help='Platforms to run. (required if not found in the environment)')
-    @CommandArgument('-u', dest='tests', nargs="*",
-                     help='Test suites to run in their entirety')
-    @CommandArgument('-b', dest='builds', default='do',
-                     help='Build types to run (d for debug, o for optimized)')
-    @CommandArgument('--tag', dest='tags', action='append',
-                     help='Restrict tests to the given tag (may be specified multiple times)')
-    @CommandArgument('--no-push', dest='push', action='store_false',
-                     help='Do not push to try as a result of running this command (if '
-                          'specified this command will only print calculated try '
-                          'syntax and selection info).')
-    @CommandArgument('extra_args', nargs=argparse.REMAINDER,
-                     help='Extra arguments to put in the try push')
-    def autotry(self, builds=None, platforms=None, paths=None, verbose=None,
-                push=None, tags=None, tests=None, extra_args=None):
+        return kwargs["builds"], platforms, tests, paths, tags, kwargs["extra_args"]
+
+    @Command('try',
+             category='testing',
+             description='Push selected tests to the try server',
+             parser=autotry.parser)
+    def autotry(self, **kwargs):
         """Autotry is in beta, please file bugs blocking 1149670.
 
         Pushes the specified tests to try. The simplest way to specify tests is
@@ -469,24 +460,30 @@ class PushToTry(MachCommandBase):
         from mozbuild.controller.building import BuildDriver
         from autotry import AutoTry
 
-        if tests is None:
-            tests = []
-
-        builds, platforms, tests = self.validate_args(paths, tests, builds, platforms)
         resolver = self._spawn(TestResolver)
-
         at = AutoTry(self.topsrcdir, resolver, self._mach_context)
+
+        if kwargs["_load"] is not None:
+            defaults = at.load_config(kwargs["_load"])
+
+            if defaults is None:
+                print("No saved configuration called %s found in mach.ini" % kwargs["_load"],
+                      file=sys.stderr)
+            for key, value in kwargs.iteritems():
+                if value in (None, []) and key in defaults:
+                    kwargs[key] = defaults[key]
+
+        builds, platforms, tests, paths, tags, extra_args = self.validate_args(**kwargs)
+
         if at.find_uncommited_changes():
             #print('ERROR please commit changes before continuing')
             #sys.exit(1)
             pass
 
-        print(paths)
         if paths:
             driver = self._spawn(BuildDriver)
             driver.install_tests(remove=False)
 
-            paths = [os.path.relpath(os.path.normpath(os.path.abspath(item)), self.topsrcdir) for item in paths]
             paths_by_flavor = at.paths_by_flavor(paths)
 
             if not paths_by_flavor and not tests:
@@ -500,15 +497,17 @@ class PushToTry(MachCommandBase):
 
         msg = at.calc_try_syntax(platforms, tests, builds, paths_by_flavor, tags, extra_args)
 
-        if verbose and paths_by_flavor:
+        if kwargs["_verbose"] and paths_by_flavor:
             print('The following tests will be selected: ')
             for flavor, paths in paths_by_flavor.iteritems():
                 print("%s: %s" % (flavor, ",".join(paths)))
 
-
         print('The following try syntax was calculated:\n%s' % msg)
 
-        if push:
-            at.push_to_try(msg, verbose)
+        if kwargs["_push"]:
+            at.push_to_try(msg, kwargs["_verbose"])
+
+        if kwargs["_save"] is not None:
+            at.save_config(kwargs["_save"], msg)
 
         return
