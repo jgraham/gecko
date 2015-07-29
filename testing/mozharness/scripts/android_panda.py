@@ -217,6 +217,20 @@ class PandaTest(TestingMixin, MercurialScript, BlobUploadMixin, MozpoolMixin, Bu
                                  if self._query_specified_suites(cat) is not None]
         super(PandaTest, self).download_and_extract(suite_categories=target_categories)
 
+    def _query_try_flavor(self, category, suite):
+        flavors = {
+            "mochitest": [("plain.*", "mochitest"),
+                          ("browser-chrome.*", "browser-chrome"),
+                          ("mochitest-devtools-chrome.*", "devtools-chrome"),
+                          ("chrome", "chrome")],
+            "xpcshell": [("xpcshell", "xpcshell")],
+            "reftest": [("reftest", "reftest"),
+                        ("crashtest", "crashtest")]
+        }
+        for suite_pattern, flavor in flavors.get(category, []):
+            if re.compile(suite_pattern).match(suite):
+                return flavor
+
     def _run_category_suites(self, suite_category, preflight_run_method=None):
         """run suite(s) to a specific category"""
 
@@ -250,7 +264,17 @@ class PandaTest(TestingMixin, MercurialScript, BlobUploadMixin, MozpoolMixin, Bu
                 for arg in suites[suite]:
                     cmd.append(arg % replace_dict)
 
-                cmd = self.append_harness_extra_args(cmd)
+                flavor = self._query_try_flavor(suite_category, suite)
+                if flavor:
+                    try_options, try_tests = self.try_args(flavor)
+
+                    for option in try_options:
+                        option = option % replace_dict
+                        cmd.append(option)
+
+                    if try_tests:
+                        cmd.append("--")
+                        cmd.extend(tests_list)
 
                 tbpl_status, log_level = None, None
                 error_list = BaseErrorList + [{

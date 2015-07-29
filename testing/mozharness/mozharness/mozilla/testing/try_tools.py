@@ -107,6 +107,7 @@ class TryToolsMixin(object):
         """Get arguments, test_list derived from try syntax to apply to a command"""
         # TODO: Detect and reject incompatible arguments
         args = self.harness_extra_args[:] if self.harness_extra_args else []
+        tests = []
 
         if self.try_test_paths[flavor]:
             self.info('TinderboxPrint: Tests will be run from the following '

@@ -222,8 +222,10 @@ class TestEnvironment(object):
                                   (b"GET",
                                    "*",
                                    serve.handlers.FileHandler)]:
-                route = (method, b"%s%s" % (str(url), str(suffix)), handler_cls(path, url_base=url))
-                routes.insert(-3, route)
+                route = (method,
+                         b"%s%s" % (str(url), str(suffix)),
+                         handler_cls(path, url_base=url))
+                routes.insert(-4, route)
 
         if "/" not in self.test_paths:
             routes = routes[:-3]

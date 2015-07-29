@@ -215,7 +215,12 @@ class B2GDesktopTest(BlobUploadMixin, TestingMixin, MercurialScript):
             self.fatal("Don't know how to run --test-suite '%s'!" % suite)
 
         cmd = self._query_abs_base_cmd(suite)
-        cmd = self.append_harness_extra_args(cmd)
+        try_options, try_tests = self.try_args(suite_name)
+        cmd.extend(try_options)
+
+        if tests_list:
+            cmd.append("--")
+            cmd.extend(tests_list)
 
         cwd = dirs['abs_%s_dir' % suite]
 
