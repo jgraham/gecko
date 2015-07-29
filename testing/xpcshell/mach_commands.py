@@ -164,10 +164,14 @@ class AndroidXPCShellRunner(MozbuildObject):
 
         import remotexpcshelltests
 
-        dm = self.get_devicemanager(devicemanager, ip, port, remote_test_root)
+        dm = self.get_devicemanager(kwargs["dm_trans"], kwargs["deviceIP"], kwargs["devicePort"],
+                                    kwargs["remoteTestRoot"])
 
         log = kwargs.pop("log")
         self.log_manager.enable_unstructured()
+
+        if kwargs["xpcshell"] is None:
+            kwargs["xpcshell"] = "xpcshell"
 
         if not kwargs["objdir"]:
             kwargs["objdir"] = self.topobjdir
@@ -188,7 +192,7 @@ class AndroidXPCShellRunner(MozbuildObject):
             kwargs["manifest"] = os.path.join(self.topobjdir, '_tests/xpcshell/xpcshell.ini')
 
         if not kwargs["symbolsPath"]:
-            kwars["symbolsPath"] = os.path.join(self.distdir, 'crashreporter-symbols')
+            kwargs["symbolsPath"] = os.path.join(self.distdir, 'crashreporter-symbols')
 
         if not kwargs["localAPK"]:
             for file_name in os.listdir(os.path.join(kwargs["objdir"], "dist")):
@@ -202,10 +206,9 @@ class AndroidXPCShellRunner(MozbuildObject):
         options = argparse.Namespace(**kwargs)
         xpcshell = remotexpcshelltests.XPCShellRemote(dm, options, log)
 
-        result = xpcshell.runTests(xpcshell='xpcshell',
-                                   testClass=remotexpcshelltests.RemoteXPCShellTestThread,
+        result = xpcshell.runTests(testClass=remotexpcshelltests.RemoteXPCShellTestThread,
                                    mobileArgs=xpcshell.mobileArgs,
-                                   **vargs(options))
+                                   **vars(options))
 
         self.log_manager.disable_unstructured()
 
