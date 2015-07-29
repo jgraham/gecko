@@ -399,6 +399,14 @@ class PushToTry(MachCommandBase):
         if platforms is None:
             platforms = os.environ['AUTOTRY_PLATFORM_HINT']
 
+        rv_platforms = []
+        for item in platforms:
+            rv_platforms.extend(x for x in item.split(",") if x for item in platforms)
+
+        rv_tests = []
+        for item in tests:
+            rv_tests.extend(x for x in item.split(",") if x for item in tests)
+
         for p in paths:
             p = os.path.normpath(os.path.abspath(p))
             if not p.startswith(self.topsrcdir):
@@ -410,7 +418,7 @@ class PushToTry(MachCommandBase):
                       ' select all tests.' % p)
                 sys.exit(1)
 
-        return builds, platforms
+        return builds, rv_platforms, rv_tests
 
     @Command('try', category='testing', description='Push selected tests to the try server')
     @CommandArgument('paths', nargs='*', help='Paths to search for tests to run on try.')
@@ -418,7 +426,7 @@ class PushToTry(MachCommandBase):
                      help='Print detailed information about the resulting test selection '
                           'and commands performed.')
     @CommandArgument('-p', dest='platforms', required='AUTOTRY_PLATFORM_HINT' not in os.environ,
-                     help='Platforms to run. (required if not found in the environment)')
+                     nargs="*", help='Platforms to run. (required if not found in the environment)')
     @CommandArgument('-u', dest='tests', nargs="*",
                      help='Test suites to run in their entirety')
     @CommandArgument('-b', dest='builds', default='do',
@@ -464,7 +472,7 @@ class PushToTry(MachCommandBase):
         if tests is None:
             tests = []
 
-        builds, platforms = self.validate_args(paths, tests, builds, platforms)
+        builds, platforms, tests = self.validate_args(paths, tests, builds, platforms)
         resolver = self._spawn(TestResolver)
 
         at = AutoTry(self.topsrcdir, resolver, self._mach_context)
@@ -473,18 +481,22 @@ class PushToTry(MachCommandBase):
             #sys.exit(1)
             pass
 
-        driver = self._spawn(BuildDriver)
-        driver.install_tests(remove=False)
+        print(paths)
+        if paths:
+            driver = self._spawn(BuildDriver)
+            driver.install_tests(remove=False)
 
-        paths = [os.path.relpath(os.path.normpath(os.path.abspath(item)), self.topsrcdir) for item in paths]
-        paths_by_flavor = at.paths_by_flavor(paths)
+            paths = [os.path.relpath(os.path.normpath(os.path.abspath(item)), self.topsrcdir) for item in paths]
+            paths_by_flavor = at.paths_by_flavor(paths)
 
-        if not paths_by_flavor and not tests:
-            print("No tests were found when attempting to resolve paths:\n\n\t%s" %
-                  paths)
-            sys.exit(1)
+            if not paths_by_flavor and not tests:
+                print("No tests were found when attempting to resolve paths:\n\n\t%s" %
+                      paths)
+                sys.exit(1)
 
-        paths_by_flavor = at.remove_duplicates(paths_by_flavor, tests)
+            paths_by_flavor = at.remove_duplicates(paths_by_flavor, tests)
+        else:
+            paths_by_flavor = {}
 
         msg = at.calc_try_syntax(platforms, tests, builds, paths_by_flavor, tags, extra_args)
 
@@ -493,8 +505,8 @@ class PushToTry(MachCommandBase):
             for flavor, paths in paths_by_flavor.iteritems():
                 print("%s: %s" % (flavor, ",".join(paths)))
 
-        if verbose or not push:
-            print('The following try syntax was calculated:\n%s\n' % msg)
+
+        print('The following try syntax was calculated:\n%s' % msg)
 
         if push:
             at.push_to_try(msg, verbose)

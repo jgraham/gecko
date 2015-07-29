@@ -10,11 +10,6 @@ import which
 
 from collections import defaultdict
 
-
-TRY_SYNTAX_TMPL = """
-try: -b %s -p %s -u %s -t none %s %s --try-test-paths %s
-"""
-
 class AutoTry(object):
 
     test_flavors = {
@@ -91,13 +86,9 @@ class AutoTry(object):
             'web-platform-tests': ['web-platform-tests-1']
         }
 
-        if tags:
-            tags = ' '.join('--tag %s' % t for t in tags)
-        else:
-            tags = ''
+        parts = ["try:", "-b", builds, "-p", ",".join(platforms)]
 
         suites = set(tests)
-
         paths = set()
         for flavor, flavor_tests in paths_by_flavor.iteritems():
             if flavor not in suites:
@@ -105,15 +96,20 @@ class AutoTry(object):
                     for test in flavor_tests:
                         paths.add("%s:%s" % (flavor, test))
                     suites.add(job_name)
-        paths = " ".join(sorted(paths))
 
-        suites = ",".join(sorted(suites))
+        parts.append("-u")
+        parts.append(",".join(sorted(suites)))
 
-        if extra_args is None:
-            extra_args = []
-        extra_args = " ".join(extra_args)
+        if tags:
+            parts.append(' '.join('--tag %s' % t for t in tags))
 
-        return TRY_SYNTAX_TMPL % (builds, platforms, suites, tags, extra_args, paths)
+        if extra_args is not None:
+            parts.extend(extra_args)
+
+        if paths:
+            parts.append("--try-test-paths %s" % " ".join(sorted(paths)))
+
+        return " ".join(parts)
 
     def _run_git(self, *args):
         args = ['git'] + list(args)
