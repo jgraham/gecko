@@ -364,9 +364,9 @@ class B2GEmulatorTest(TestingMixin, VCSMixin, BaseScript, BlobUploadMixin):
         try_options, try_tests = self.try_args(suite)
         cmd.extend(try_options)
 
-        if tests_list:
+        if try_tests:
             cmd.append("--")
-            cmd.extend(tests_list)
+            cmd.extend(try_tests)
 
 
         # TODO we probably have to move some of the code in
