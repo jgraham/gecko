@@ -582,7 +582,7 @@ def main():
 
     if not xpcsh.runTests(testClass=RemoteXPCShellTestThread,
                           mobileArgs=xpcsh.mobileArgs,
-                          **options.__dict__):
+                          **vars(options)):
         sys.exit(1)
 
 
