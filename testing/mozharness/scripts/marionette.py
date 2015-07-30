@@ -464,9 +464,9 @@ class MarionetteTest(TestingMixin, MercurialScript, BlobUploadMixin, TransferMix
         try_options, try_tests = self.try_args("marionette")
         cmd.extend(try_options)
 
-        if tests_list:
+        if try_tests:
             cmd.append("--")
-            cmd.extend(tests_list)
+            cmd.extend(try_tests)
 
         env = {}
         if self.query_minidump_stackwalk():

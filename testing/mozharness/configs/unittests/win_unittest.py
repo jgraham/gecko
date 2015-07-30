@@ -106,23 +106,22 @@ config = {
                         '--setpref=layers.async-pan-zoom.enabled=true'],
             'tests': ['tests/reftest/tests/layout/reftests/reftest-sanity/reftest.list']
         },
-
         "reftest-no-accel": {
             "options": ["--suite=reftest",
                         "--setpref=gfx.direct2d.disabled=true",
                         "--setpref=layers.acceleration.disabled=true"],
             "tests": ["tests/reftest/tests/layout/reftests/reftest.list"]
-        }
+        },
         "reftest-omtc": {
             "options": ["--suite=reftest",
                         "--setpref=layers.offmainthreadcomposition.enabled=true"],
             "tests": ["tests/reftest/tests/layout/reftests/reftest.list"]
-        }
+        },
         "crashtest-ipc": {
             "options": ["--suite=crashtest",
                         '--setpref=browser.tabs.remote=true',
                         '--setpref=browser.tabs.remote.autostart=true',
-                        '--setpref=layers.async-pan-zoom.enabled=true']
+                        '--setpref=layers.async-pan-zoom.enabled=true'],
             "tests": ['tests/reftest/tests/testing/crashtest/crashtests.list'],
         },
     },

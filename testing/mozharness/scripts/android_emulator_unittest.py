@@ -656,7 +656,14 @@ class AndroidEmulatorTest(BlobUploadMixin, TestingMixin, EmulatorMixin, VCSMixin
         Run the tests
         """
         cmd = self._build_command()
-        cmd = self.append_harness_extra_args(cmd)
+        suite_category = self.test_suite_definitions[self.test_suite]["category"]
+        try_options, try_tests = self.try_args(suite_category)
+        cmd.extend(try_options)
+
+        if tests_list:
+            cmd.append("--")
+            cmd.extend(tests_list)
+
         try:
             cwd = self._query_tests_dir()
         except:
