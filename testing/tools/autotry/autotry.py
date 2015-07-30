@@ -20,9 +20,9 @@ try: -b %s -p %s -u %s -t none %s %s --try-test-paths %s
 def parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('paths', nargs='*', help='Paths to search for tests to run on try.')
-    parser.add_argument('-p', dest='platforms', nargs="*",
+    parser.add_argument('-p', dest='platforms', action="append",
                         help='Platforms to run. (required if not found in the environment)')
-    parser.add_argument('-u', dest='tests', nargs="*",
+    parser.add_argument('-u', dest='tests', action="append",
                         help='Test suites to run in their entirety')
     parser.add_argument('-b', dest='builds', default='do',
                         help='Build types to run (d for debug, o for optimized)')
