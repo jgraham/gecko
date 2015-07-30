@@ -1448,9 +1448,6 @@ def main():
         print >>sys.stderr, "Error: You must specify a test filename in interactive mode!"
         sys.exit(1)
 
-    if options.xpcshell is None:
-        options.xpcshell = "xpcshell"
-
     if not xpcsh.runTests(**vars(options)):
         sys.exit(1)
 

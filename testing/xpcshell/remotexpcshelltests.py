@@ -575,6 +575,9 @@ def main():
         print >>sys.stderr, "Error: You must specify a test filename in interactive mode!"
         sys.exit(1)
 
+    if options.xpcshell is None:
+        options.xpcshell = "xpcshell"
+
     xpcsh = XPCShellRemote(dm, options, log)
 
     # we don't run concurrent tests on mobile
