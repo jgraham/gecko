@@ -660,7 +660,7 @@ class AndroidEmulatorTest(BlobUploadMixin, TestingMixin, EmulatorMixin, VCSMixin
         try_options, try_tests = self.try_args(suite_category)
         cmd.extend(try_options)
 
-        if tests_list:
+        if try_tests:
             cmd.append("--")
             cmd.extend(tests_list)
 
