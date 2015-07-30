@@ -30,7 +30,7 @@ def parser_common():
                         dest="testingModulesDir", default=None,
                         help="Directory where testing modules are located.")
     parser.add_argument("--test-plugin-path",
-                        type=unicode, dest="pluginsPath", default=None,
+                        type=str, dest="pluginsPath", default=None,
                         help="Path to the location of a plugins directory containing the test plugin or plugins required for tests. "
                         "By default xpcshell's dir svc provider returns gre/plugins. Use test-plugin-path to add a directory "
                         "to return for NS_APP_PLUGINS_DIR_LIST when queried.")
@@ -41,21 +41,21 @@ def parser_common():
                         type=int, dest="thisChunk", default=1,
                         help="which chunk to run between 1 and --total-chunks")
     parser.add_argument("--profile-name",
-                        type=unicode, dest="profileName", default=None,
+                        type=str, dest="profileName", default=None,
                         help="name of application profile being tested")
     parser.add_argument("--build-info-json",
-                        type=unicode, dest="mozInfo", default=None,
+                        type=str, dest="mozInfo", default=None,
                         help="path to a mozinfo.json including information about the build configuration. defaults to looking for mozinfo.json next to the script.")
     parser.add_argument("--shuffle",
                         action="store_true", dest="shuffle", default=False,
                         help="Execute tests in random order")
     parser.add_argument("--xre-path",
-                        action="store", type=unicode, dest="xrePath",
+                        action="store", type=str, dest="xrePath",
                         # individual scripts will set a sane default
                         default=None,
                         help="absolute path to directory containing XRE (probably xulrunner)")
     parser.add_argument("--symbols-path",
-                        action="store", type=unicode, dest="symbolsPath",
+                        action="store", type=str, dest="symbolsPath",
                         default=None,
                         help="absolute path to directory containing breakpad symbols, or the URL of a zip file containing symbols")
     parser.add_argument("--debugger",
@@ -121,24 +121,24 @@ def parser_remote():
                         choices=["adb", "sut"], default="sut",
                         help="the transport to use to communicate with device: [adb|sut]; default=sut")
 
-    parser.add_argument("--objdir", action="store", type=unicode, dest="objdir",
+    parser.add_argument("--objdir", action="store", type=str, dest="objdir",
                         help="local objdir, containing xpcshell binaries")
 
 
-    parser.add_argument("--apk", action="store", type=unicode, dest="localAPK",
+    parser.add_argument("--apk", action="store", type=str, dest="localAPK",
                         help="local path to Fennec APK")
 
 
     parser.add_argument("--noSetup", action="store_false", dest="setup", default=True,
                         help="do not copy any files to device (to be used only if device is already setup)")
 
-    parser.add_argument("--local-lib-dir", action="store", type=unicode, dest="localLib",
+    parser.add_argument("--local-lib-dir", action="store", type=str, dest="localLib",
                         help="local path to library directory")
 
-    parser.add_argument("--local-bin-dir", action="store", type=unicode, dest="localBin",
+    parser.add_argument("--local-bin-dir", action="store", type=str, dest="localBin",
                         help="local path to bin directory")
 
-    parser.add_argument("--remoteTestRoot", action="store", type=unicode, dest="remoteTestRoot",
+    parser.add_argument("--remoteTestRoot", action="store", type=str, dest="remoteTestRoot",
                         help="remote directory to use as test root (eg. /mnt/sdcard/tests or /data/local/tests)")
 
     return parser
@@ -163,7 +163,7 @@ def parser_b2g():
     parser.add_argument('--no-window', action='store_true', dest='no_window', default=False,
                         help="Pass --no-window to the emulator")
 
-    parser.add_argument('--adbpath', action='store', type=unicode, dest='adb_path',
+    parser.add_argument('--adbpath', action='store', type=str, dest='adb_path',
                         default="adb", help="Path to adb")
 
     parser.add_argument('--address', action='store', type=str, dest='address',
@@ -172,14 +172,14 @@ def parser_b2g():
     parser.add_argument('--use-device-libs', action='store_true', dest='use_device_libs',
                         default=None, help="Don't push .so's")
 
-    parser.add_argument("--gecko-path", action="store", type=unicode, dest="geckoPath",
+    parser.add_argument("--gecko-path", action="store", type=str, dest="geckoPath",
                         help="the path to a gecko distribution that should "
                         "be installed on the emulator prior to test")
 
-    parser.add_argument("--logdir", action="store", type=unicode, dest="logdir",
+    parser.add_argument("--logdir", action="store", type=str, dest="logdir",
                         help="directory to store log files")
 
-    parser.add_argument('--busybox', action='store', type=unicode, dest='busybox',
+    parser.add_argument('--busybox', action='store', type=str, dest='busybox',
                         help="Path to busybox binary to install on device")
 
     parser.set_defaults(remoteTestRoot="/data/local/tests",
