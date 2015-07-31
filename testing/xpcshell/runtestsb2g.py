@@ -133,6 +133,9 @@ def run_remote_xpcshell(parser, options, log):
     # we don't run concurrent tests on mobile
     options.sequential = True
 
+    if options.xpcshell is None:
+        options.xpcshell = "xpcshell"
+
     try:
         if not xpcsh.runTests(testClass=B2GXPCShellTestThread,
                               mobileArgs=xpcsh.mobileArgs,
