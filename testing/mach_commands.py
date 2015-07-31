@@ -394,21 +394,23 @@ class JsapiTestsCommand(MachCommandBase):
 class PushToTry(MachCommandBase):
 
     def normalise_list(self, items):
+        if items is None:
+            return []
+
         rv = []
         for item in items:
             rv.extend(x.strip() for x in item.split(",") if x.strip())
         return rv
 
     def validate_args(self, **kwargs):
-        if not len(kwargs["paths"]) and not kwargs["tests"]:
-            print("Paths or tests must be specified as an argument to autotry.")
-            sys.exit(1)
-
-        if kwargs["platforms"] is None:
-            print("Platforms must be specified as an argument to autotry")
-
-        platforms = self.normalise_list(kwargs["platforms"])
-        tests = self.normalise_list(kwargs["tests"]) if kwargs["tests"] else []
+        try_args = {
+            "configuration": kwargs["builds"],
+            "platforms": self.normalise_list(kwargs["platforms"]),
+            "tests": self.normalise_list(kwargs["tests"]),
+            "talos": self.normalise_list(kwargs["talos"]),
+            "tags": self.normalise_list(kwargs["tags"]),
+            "extra_args": kwargs["extra_args"]
+        }
 
         paths = []
         for p in kwargs["paths"]:
@@ -420,12 +422,11 @@ class PushToTry(MachCommandBase):
             if len(p) <= len(self.topsrcdir):
                 print('Specified path "%s" is at the top of the srcdir and would'
                       ' select all tests.' % p)
-                sys.exit(1)
             paths.append(os.path.relpath(p, self.topsrcdir))
 
-        tags = self.normalise_list(kwargs["tags"]) if kwargs["tags"] else []
+        try_args["paths"] = paths
 
-        return kwargs["builds"], platforms, tests, paths, tags, kwargs["extra_args"]
+        return try_args
 
     @Command('try',
              category='testing',
@@ -459,6 +460,7 @@ class PushToTry(MachCommandBase):
         from mozbuild.testing import TestResolver
         from mozbuild.controller.building import BuildDriver
         from autotry import AutoTry
+        import trychooser
 
         resolver = self._spawn(TestResolver)
         at = AutoTry(self.topsrcdir, resolver, self._mach_context)
@@ -473,29 +475,38 @@ class PushToTry(MachCommandBase):
                 if value in (None, []) and key in defaults:
                     kwargs[key] = defaults[key]
 
-        builds, platforms, tests, paths, tags, extra_args = self.validate_args(**kwargs)
+        try_args = self.validate_args(**kwargs)
 
         if at.find_uncommited_changes():
-            #print('ERROR please commit changes before continuing')
-            #sys.exit(1)
-            pass
+            print('ERROR please commit changes before continuing')
+            sys.exit(1)
 
-        if paths:
+        if try_args["paths"]:
             driver = self._spawn(BuildDriver)
             driver.install_tests(remove=False)
 
-            paths_by_flavor = at.paths_by_flavor(paths)
+            paths_by_flavor = at.paths_by_flavor(try_args["paths"])
 
-            if not paths_by_flavor and not tests:
+            if not paths_by_flavor and not try_args["tests"]:
                 print("No tests were found when attempting to resolve paths:\n\n\t%s" %
-                      paths)
+                      try_args["paths"])
                 sys.exit(1)
 
-            paths_by_flavor = at.remove_duplicates(paths_by_flavor, tests)
+            paths_by_flavor = at.remove_duplicates(paths_by_flavor, try_args["tests"])
         else:
             paths_by_flavor = {}
 
-        msg = at.calc_try_syntax(platforms, tests, builds, paths_by_flavor, tags, extra_args)
+        try_args["tests"], try_args["paths"] = at.calculate_tests(try_args["tests"],
+                                                                  paths_by_flavor)
+
+        if kwargs["_choose"] or not try_args["configuration"] or not try_args["platforms"]:
+            try:
+                msg = trychooser.main(at.trychooser_filter, try_args)
+            except trychooser.QuitException:
+                return
+
+        else:
+            msg = trychooser.calculate_try_syntax(try_args)
 
         if kwargs["_verbose"] and paths_by_flavor:
             print('The following tests will be selected: ')

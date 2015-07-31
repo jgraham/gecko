@@ -79,6 +79,7 @@ SEARCH_PATHS = [
     'xpcom/idl-parser',
     'testing',
     'testing/tools/autotry',
+    'testing/tools/',
     'testing/taskcluster',
     'testing/xpcshell',
     'testing/web-platform',

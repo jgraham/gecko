@@ -13,21 +13,23 @@ from collections import defaultdict
 
 import ConfigParser
 
-TRY_SYNTAX_TMPL = """
-try: -b %s -p %s -u %s -t none %s %s --try-test-paths %s
-"""
 
 def parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('paths', nargs='*', help='Paths to search for tests to run on try.')
+    parser.add_argument('-b', dest='builds', default='do',
+                        help='Build types to run (d for debug, o for optimized)')
     parser.add_argument('-p', dest='platforms', action="append",
                         help='Platforms to run. (required if not found in the environment)')
     parser.add_argument('-u', dest='tests', action="append",
                         help='Test suites to run in their entirety')
-    parser.add_argument('-b', dest='builds', default='do',
-                        help='Build types to run (d for debug, o for optimized)')
+    parser.add_argument('-t', dest='talos', action="append",
+                        help='Talos suites to run')
     parser.add_argument('--tag', dest='tags', action='append',
                         help='Restrict tests to the given tag (may be specified multiple times)')
+    parser.add_argument('paths', nargs='*', help='Paths to search for tests to run on try.')
+
+    parser.add_argument('--choose', dest="_choose", action="store_true",
+                        help="Invoke the trychooser utility to select parameters")
     parser.add_argument('--no-push', dest='_push', action='store_false',
                         help='Do not push to try as a result of running this command (if '
                         'specified this command will only print calculated try '
@@ -36,12 +38,15 @@ def parser():
                         help="Save the command line arguments for future use with --preset")
     parser.add_argument('--preset', dest="_load", action='store',
                         help="Load a saved set of arguments. Additional arguments will override saved ones")
-    parser.add_argument('extra_args', nargs=argparse.REMAINDER,
-                        help='Extra arguments to put in the try push')
     parser.add_argument('-v', dest='_verbose', action='store_true', default=False,
                         help='Print detailed information about the resulting test selection '
                         'and commands performed.')
+
+    parser.add_argument('extra_args', nargs=argparse.REMAINDER,
+                        help='Extra arguments to put in the try push')
+
     return parser
+
 
 class AutoTry(object):
 
@@ -62,6 +67,19 @@ class AutoTry(object):
         }
     }
 
+    flavor_jobs = {
+        'mochitest': ['mochitest-1', 'mochitest-e10s-1'],
+        'xpcshell': ['xpcshell'],
+        'chrome': ['mochitest-o'],
+        'browser-chrome': ['mochitest-browser-chrome-1',
+                           'mochitest-e10s-browser-chrome-1'],
+        'devtools-chrome': ['mochitest-dt',
+                            'mochitest-e10s-devtools-chrome'],
+        'crashtest': ['crashtest', 'crashtest-e10s'],
+        'reftest': ['reftest', 'reftest-e10s'],
+        'web-platform-tests': ['web-platform-tests-1']
+    }
+
     def __init__(self, topsrcdir, resolver, mach_context):
         self.topsrcdir = topsrcdir
         self.resolver = resolver
@@ -71,6 +89,15 @@ class AutoTry(object):
             self._use_git = False
         else:
             self._use_git = True
+
+    def trychooser_filter(self, parents, item):
+        if parents[0] != "tests":
+            return True
+
+        for category in self.flavor_jobs:
+            if parents[-1].startswith(category) and item not in self.flavor_jobs[category]:
+                return False
+        return True
 
     def load_config(self, name):
         config_file = os.path.join(self.topsrcdir, "mach.ini")
@@ -135,49 +162,19 @@ class AutoTry(object):
                 rv[item] = paths_by_flavor[item].copy()
         return rv
 
-    def calc_try_syntax(self, platforms, tests, builds, paths_by_flavor, tags, extra_args):
-        #problem: if we specify a directory like foo/bar to reftests and there isn't
-        #a reftest file in foo/bar but there is one in foo/bar/baz, the reftest harness
-        #won't run the tests
-
+    def calculate_tests(self, tests, paths_by_flavor):
         # Maps from flavors to the job names needed to run that flavour
-        flavor_jobs = {
-            'mochitest': ['mochitest-1', 'mochitest-e10s-1'],
-            'xpcshell': ['xpcshell'],
-            'chrome': ['mochitest-o'],
-            'browser-chrome': ['mochitest-browser-chrome-1',
-                               'mochitest-e10s-browser-chrome-1'],
-            'devtools-chrome': ['mochitest-dt',
-                                'mochitest-e10s-devtools-chrome'],
-            'crashtest': ['crashtest', 'crashtest-e10s'],
-            'reftest': ['reftest', 'reftest-e10s'],
-            'web-platform-tests': ['web-platform-tests-1']
-        }
-
-        parts = ["try:", "-b", builds, "-p", ",".join(platforms)]
-
         suites = set(tests)
         paths = set()
         for flavor, flavor_tests in paths_by_flavor.iteritems():
             if flavor not in suites:
-                for job_name in flavor_jobs[flavor]:
+                for job_name in self.flavor_jobs[flavor]:
                     for test in flavor_tests:
                         paths.add("%s:%s" % (flavor, test))
                     suites.add(job_name)
 
-        parts.append("-u")
-        parts.append(",".join(sorted(suites)))
 
-        if tags:
-            parts.append(' '.join('--tag %s' % t for t in tags))
-
-        if extra_args is not None:
-            parts.extend(extra_args)
-
-        if paths:
-            parts.append("--try-test-paths %s" % " ".join(sorted(paths)))
-
-        return " ".join(parts)
+        return list(sorted(suites)), paths
 
     def _run_git(self, *args):
         args = ['git'] + list(args)
