@@ -157,7 +157,7 @@ class CursesTrySelector(TreeSelector):
         if response.lower().startswith("e"):
             self.trySyntaxOverride = self.inline_edit(confirmWin, self.generateTrySyntax()).rstrip()
             return True
-        elif response.lower().startswith("y"):
+        elif response.lower().startswith("y", "\n"):
             return True
         else:
             return False
