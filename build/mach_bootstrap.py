@@ -139,6 +139,7 @@ MACH_MODULES = [
     'testing/mach_commands.py',
     'testing/taskcluster/mach_commands.py',
     'testing/marionette/mach_commands.py',
+    'testing/mozharness/mach_commands.py',
     'testing/mochitest/mach_commands.py',
     'testing/xpcshell/mach_commands.py',
     'testing/talos/mach_commands.py',
